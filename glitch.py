@@ -4,6 +4,7 @@ import pymssql
 import time
 import datetime
 import itertools
+import sys
 
 def connect():
     ''' connect to the fsdbdata database'''
@@ -51,6 +52,7 @@ def get_probes(cursor, dbid_dict):
 
   return probe_dict
 
+
 def get_probetype(cursor, tableid):
 
   define_query = "select column_name from fsdbdata.information_schema.columns where table_name like \'" + tableid + "\' and column_name like \'PROBE%\'"
@@ -62,13 +64,31 @@ def get_probetype(cursor, tableid):
 
   return probetype
 
+def get_many_probetypes(cursor, probe_dict):
+  """ if you want to get several probes """
+
+  probe_type_dict = {}
+
+  for each_key in probe_dict.keys():
+    pt = get_probetype(cursor, each_key)
+
+    if each_key not in probe_type_dict and pt != []:
+      probe_type_dict[each_key] = pt
+    else:
+      pass
+
+  return probe_type_dict
+
+def list_from_sublists(list_of_sublists):
+  """ generates a lists from a bunch of sublists"""
+  return list(itertools.chain.from_iterable(list_of_sublists))
+
 def get_attribute_names(cursor, tableid):
 
   attr = []
   flags = []
 
   define_query = "select column_name from fsdbdata.information_schema.columns where table_name like \'" + tableid + "\' and column_name like \'%MEAN%\'"
-  print define_query
 
   cursor.execute(define_query)
 
@@ -76,15 +96,15 @@ def get_attribute_names(cursor, tableid):
     if 'FLAG'.lower() not in str(row[0]).lower():
       mean_name = str(row[0]).rstrip()
       attr.append(mean_name)
+    
     elif 'FLAG'.lower() in str(row[0]).lower():
       flag_name = str(row[0]).rstrip()
       flags.append(flag_name)
+    
     else:
       print("attribute has a strange name of: %s") %(str(row[0]).rstrip())
 
-
-  print attr, flags
-  return attr, flags
+  return attr, flags 
 
 def get_data_in_range(cursor, startdate, enddate, tableid, probetype, attr, flags, *args):
 
@@ -167,92 +187,161 @@ def glitchme(valid_data, interval):
   """ if the current minute is less than the stop point, we add its value to the minute table and add increment the time by 1 minute """
   for each_minute in one_minute_values:
 
+    # if current value is less than desired append
     if each_minute[0] < this_date - datetime.timedelta(minutes=1):
       t_mean.append(each_minute[1])
       f_mean.append(each_minute[2])
 
-
+    # if current value is same as desired, register for calculation
     elif each_minute[0] == this_date-datetime.timedelta(minutes=1):
       t_mean.append(each_minute[1])
       results[this_date] = t_mean
       f_mean.append(each_minute[2])
       results_flags[this_date] = f_mean
 
+      # generate another measurement
       try:
         this_date = output_drange.next()
         print "sought glitched date-time is " + str(this_date)
         t_mean = []
         f_mean = []
+
+        # if new measurement is bigger than the biggest 1 minute, return all values
+        if this_date > dr[-1]:
+          return results, results_flags
+
+      # if the iteration runs out before all one-minutes, stop 
       except StopIteration:
         print "Stop iteration caught, exiting the glitcher"
         results[this_date] = t_mean
         results_flags[this_date] = f_mean
         return results, results_flags
 
+      # if a none-value exists, stop
+      except TypeError:
+        print "no more data left, exiting the glitcher"
+        results[this_date] = t_mean
+        results_flags[this_date] = f_mean
+        return results, results_flags
+
+    # if the one minutes are somehow larger than the iterator (don't think this is possible) stop
     elif each_minute[0] > this_date:
       print "output > date, unexpected behavior for iterator - see Fox to debug?"
       return results, results_flags
 
+    # just in case, throw error to notice weird behavior here
     else:
       print "Something unexpected. Hum X files theme. Existential crisis."
 
 def create_glitched_output(results, results_flags):
+  """hum rocky theme joyfully do -dee do do"""
+  final_glitch = {}
 
-    final_glitch = {}
+  for each_glitch in sorted(results.keys()):
 
-    for each_glitch in sorted(results.keys()):
+    if results[each_glitch] != []:
 
-      if results[each_glitch] != []:
+      meanval = round( sum(results[each_glitch])/len(glitched_dict[each_glitch]),2)
 
-        meanval = round( sum(results[each_glitch])/len(glitched_dict[each_glitch]),2)
+      try:
+        num_flags = len(results_flags[each_glitch])
+        if ['E','M','Q'] not in results_flags[each_glitch]:
+          flaggedval = 'A'
+        else:
+          numM = len([x for x in results_flags[each_glitch] if x == 'M'])
+          numE = len([x for x in results_flags[each_glitch] if x == 'E'])
+          numQ = len([x for x in results_flags[each_glitch] if x == 'Q'])
 
-        try:
-          num_flags = len(results_flags[each_glitch])
-          if ['E','M','Q'] not in results_flags[each_glitch]:
-            flaggedval = 'A'
-          else:
-            numM = len([x for x in results_flags[each_glitch] if x == 'M'])
-            numE = len([x for x in results_flags[each_glitch] if x == 'E'])
-            numQ = len([x for x in results_flags[each_glitch] if x == 'Q'])
-
-            if numM/num_flags > 0.8:
-              flagged_val = 'M'
-            elif numE/num_flags > 0.05:
-              flagged_val = 'E'
-            elif (numE + numM + numQ)/num_flags > 0.05:
-              flagged_val = 'Q'
-            else:
-              flagged_val = 'A'
-        except Exception:
+          if numM/num_flags > 0.8:
             flagged_val = 'M'
+          elif numE/num_flags > 0.05:
+            flagged_val = 'E'
+          elif (numE + numM + numQ)/num_flags > 0.05:
+            flagged_val = 'Q'
+          else:
+            flagged_val = 'A'
+      
+      except Exception:
+          flagged_val = 'M'
 
 
-      elif results[each_glitch] == []:
-        meanval = None
-        flaggedval = 'M'
+    elif results[each_glitch] == []:
+      meanval = None
+      flaggedval = 'M'
 
-      final_glitch[each_glitch] = {'mean': meanval, 'flags': flaggedval}
+    final_glitch[each_glitch] = {'mean': meanval, 'flags': flaggedval}
 
-    return final_glitch
+  return final_glitch
+
+def html_that_glitch(final_glitch):
+  """ makes some lists"""
+
+  list_of_dates=[datetime.datetime.strftime(glitch_day, '%Y-%m-%d %H:%M') for glitch_day in sorted(final_glitch.keys())]
+  list_of_flags=[final_glitch[glitch_day]['flags'] for glitch_day in sorted(final_glitch.keys())]
+  list_of_vals=[str(final_glitch[glitch_day]['mean']) for glitch_day in sorted(final_glitch.keys())]
+
+  with open('//Volumes/andlter/LTERPlot/Fox/test.html','w') as htmlfile:
+    htmlfile.write("""
+    <!DOCTYPE html>
+    <html xmlns="http://www.w3.org/1999/xhtml">
+    <head>
+        <title>Test from Python</title>
+    </head>
+    <h1> Hello, this is Python, coming at you from APPLE. </h1>
+    <body>
+    <br> Date, Flag, Value </br>
+    """)
+
+    for index, item in enumerate(list_of_dates):
+      new_row = [item, list_of_flags[index], list_of_vals[index], "</br>"]
+      nr = ", ".join(new_row)
+      htmlfile.write(nr)
+    htmlfile.write("</body></html>")
+    htmlfile.close()
 
 if __name__ == "__main__":
 
   # test with MS043, MS04311 - can loop over keys later
-  cx, cur = connect()
-  dbx_dict = get_data(cur, 'MS043')
-  prx_dict = get_probes(cur, dbx_dict)
-  probex = get_probetype(cur, 'MS04311')
-  attrx, flagx = get_attribute_names(cur,'MS04311')
-  vd = get_data_in_range(cur, '2010-04-10 00:00:00', '2010-04-10 02:00:00', 'MS04311', probex, attrx, flagx, 'AIRCEN01')
 
-  # printing output for simple test
-  print dbx_dict
-  print prx_dict
-  print vd
+  dbcode_id = sys.argv[1]
+
+  if sys.argv[2] and sys.argv[2] != []:
+    table_id = sys.argv[2]
+  else:
+    table_id = 'MS04311'
+
+  glitch_minutes = int(sys.argv[3])
+
+  cx, cur = connect()
+
+  # give the dbcode id to the lookup- first parameter to input, has been tested on HT004, MS001, MS043, TP001
+  dbx_dict = get_data(cur, dbcode_id)
+
+  # get the probes, what the "type" of their name is, and the attributes within
+  prx_dict = get_probes(cur, dbx_dict)
+
+  # get the type of the probe that it is
+  probex = get_probetype(cur, table_id)
+
+  # get all attributes and flags that are means
+  attrx, flagx = get_attribute_names(cur, table_id)
+
+  # pass a probe_name for testing
+  probe_name = 'AIRVAN01'
+
+  # pass a start_date and end_date for testing
+
+  start_date = '2010-04-10 00:00:00'
+  end_date = '2010-04-10 03:00:00'
+
+  # get the data -- works to this point
+  vd = get_data_in_range(cur, start_date, end_date, table_id, probex, attrx, flagx, probe_name)
 
   # now to aggregate
-  glitched_dict, glitched_flags = glitchme(vd, 3)
+  glitched_dict, glitched_flags = glitchme(vd, glitch_minutes)
 
   finalz = create_glitched_output(glitched_dict, glitched_flags)
+  html_that_glitch(finalz)
+
 
   print finalz
