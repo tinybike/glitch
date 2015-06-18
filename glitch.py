@@ -6,6 +6,7 @@ import datetime
 import itertools
 import sys
 
+
 def connect():
     ''' connect to the fsdbdata database'''
 
@@ -13,6 +14,7 @@ def connect():
     cursor = conn.cursor()
 
     return conn, cursor
+
 
 def get_data(cursor, databaseid):
   ''' from entity table, get the entity number and entity name based on the table name we are familiar with, such as MS043 '''
@@ -25,10 +27,10 @@ def get_data(cursor, databaseid):
 
   for row in cursor:
 
-    if str(row[1]).rstrip() not in dbid_dict:
-      dbid_dict[str(row[1]).rstrip()] = str(row[0]).rstrip()
-    else:
-      pass
+  if str(row[1]).rstrip() not in dbid_dict:
+    dbid_dict[str(row[1]).rstrip()] = str(row[0]).rstrip()
+  else:
+    pass
 
   return dbid_dict
 
@@ -232,6 +234,19 @@ def glitchme(valid_data, interval):
     # just in case, throw error to notice weird behavior here
     else:
       print "Something unexpected. Hum X files theme. Existential crisis."
+
+
+def create_glitched_dirs(results1, results2, results_flags2):
+  """ using speed and dir for dir"""
+  final_glitch = {}
+
+  for each_glitch in sorted(results1.keys()):
+    if results1[each_glitch] != []:
+
+      num_valid_obs = len(results1[each_glitch])
+
+      # theta_u = math.atan2(sum([float(speed) * math.sin(math.radians(float(x))) for (speed, x) in itertools.izip(results1[each_glitch]['attr'], results2[each_date]['attr']) if speed != 'None' and x != 'None'])/num_valid_obs, sum([float(speed) * math.cos(math.radians(float(x))) for (speed, x) in itertools.izip(results1[each_date]['attr'],results2['attr']) if speed != 'None' and x != 'None'])/num_valid_obs)
+  return num_valid_obs 
 
 def create_glitched_output(results, results_flags):
   """hum rocky theme joyfully do -dee do do"""
