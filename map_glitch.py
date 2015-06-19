@@ -8,25 +8,6 @@ import sys
 import yaml
 import json
 
-# class SchemaInfoBuild(object):
-
-#   def __init__(self):
-#     """ Class for building up the background information that only needs to be run once or twice. Ultimately move all the functions below into this."""
-#     _, self.cursor = connect()
-#       self.possible = ['MS043', 'MV001', 'TW006', 'MS001', 'MS005', 'TV025', 'HT004']
-#       self.od = all_build_dict()
- 
-#   def all_build_dict(self):  
-#     """ Possible schema which have a column containing 'probe'. Add to this list to make a more robust search space"""
-
-#     for each_schema in self.possible:
-#       if each_schema not in od:
-#           od[each_schema] = get_entity_id(each_schema)
-#       else:
-#         pass
-#     return od
-
-
 def connect():
     ''' connect to the fsdbdata database'''
 
@@ -185,32 +166,6 @@ def write_schema_to_json(this_schema, schema_dict):
     with open(this_schema + '.json', 'w') as outfile:
         json.dump(schema_dict, outfile)
 
-def process_epic_to_html(startdaydict, enddaydict):
-    pass
-
-# def query_fsdb_for_data(my_attribute, probe_word, mean_words):
-
-#     query = "select " + probe_word + ", ".join(mean_words) + " from fsdbdata.dbo." + my_attribute + " order by date_time >= \'" + startdate + "\' and  date_time < \'" + enddate + "\' and "+ probetype + " like \'" + args[0] + "\'"
-
-# def get_attribute_id_for_probe(cursor, my_attribute, dbid_dict):
-#     """ get the probe codes from attribute"""
-
-#     # filler
-#     # my_attribute = 'MS04311'
-#     my_entity_id = str(dbid_dict[my_attribute]['entity_id'])
-
-#     define_query = "select attribute_id from ltermeta.dbo.entity_attribute where entity_id = \'" + my_entity_id +  "\'"
-
-#     cursor.execute(define_query)
-
-#     list_attributes = []
-
-#     for row in cursor:
-#         try:
-#             list_attributes.append(int(row[0]))
-#         except Exception:
-#             import pdb; pdb.set_trace()
-#     return tuple(list_attributes)
 
 def get_attribute_names_for_probe_and_site(cursor, list_attributes):
     """ get the probe code name and mean things name from attribute table"""
@@ -255,17 +210,9 @@ def windy_attributes(name):
     if 'WSPD' in name or 'WDIR' in name or 'WMAG' in name or 'WVc' in name or 'WIND' in name:
         return True
 
-# def get_specific_probe_data(attribute_ids_for_glitching):
+if __name__ == "__main__":
 
-#     enumerated_domain_ids_for_glitching = []
-#     define_query = "select enum_domain_id from ltermeta.dbo.attribute_enum_domain where attribute_id in " + attribute_ids_for_glitching
-
-#     cursor.execute(define_query)
-
-#     for row in cursor:
-#         enumerated_domain_ids_for_glitching.append(int(row[0]))
-
-#     return tuple(enumerated_domain_ids_for_glitching)
-
-def big_master_list(enumerated_domain_ids_for_glitching):
-    pass
+    # this is really all there is to it, the rest is just sauce
+    _, cursor = connect()
+    od = all_build_dict(cursor)
+    all_get_references(cursor, od)

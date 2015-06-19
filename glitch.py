@@ -5,7 +5,7 @@ import time
 import datetime
 import itertools
 import sys
-
+import math
 
 def connect():
     ''' connect to the fsdbdata database'''
@@ -27,10 +27,10 @@ def get_data(cursor, databaseid):
 
   for row in cursor:
 
-  if str(row[1]).rstrip() not in dbid_dict:
-    dbid_dict[str(row[1]).rstrip()] = str(row[0]).rstrip()
-  else:
-    pass
+    if str(row[1]).rstrip() not in dbid_dict:
+      dbid_dict[str(row[1]).rstrip()] = str(row[0]).rstrip()
+    else:
+      pass
 
   return dbid_dict
 
@@ -235,8 +235,61 @@ def glitchme(valid_data, interval):
     else:
       print "Something unexpected. Hum X files theme. Existential crisis."
 
+def create_glitched_speeds(results1, results2, results_flags):
+  """each speed is with its direction for the aggregate """
+  final_glitch = {}
 
-def create_glitched_dirs(results1, results2, results_flags2):
+  for each_glitch in sorted(results1.keys()):
+    if results1[each_glitch] != []:
+
+      num_valid_obs = len(results1[each_glitch])
+
+      #import pdb;pdb.set_trace()
+  
+      ypart = (sum([float(speed) * math.sin(math.radians(float(x))) for (speed, x) in itertools.izip(results1[each_glitch], results2[each_glitch]) if speed != 'None' and x != 'None'])/num_valid_obs)**2  
+
+      xpart = (sum([float(speed) * math.cos(math.radians(float(x))) for (speed, x) in itertools.izip(results1[each_glitch],results2[each_glitch]) if speed != 'None' and x != 'None'])/num_valid_obs)**2 
+
+      glitched_spd = math.sqrt(ypart + xpart)
+
+      try:
+        num_flags = len(results_flags[each_glitch])
+        if ['E','M','Q'] not in results_flags[each_glitch]:
+          glitched_spd_flag = 'A'
+        
+        else:
+          numM = len([x for x in results_flags[each_glitch] if x == 'M'])
+          numE = len([x for x in results_flags[each_glitch] if x == 'E'])
+          numQ = len([x for x in results_flags[each_glitch] if x == 'Q'])
+
+          if numM/num_flags > 0.8:
+            glitched_spd_flag = 'M'
+          elif numE/num_flags > 0.05:
+            glitched_spd_flag = 'E'
+          elif (numE + numM + numQ)/num_flags > 0.05:
+            glitched_spd_flag = 'Q'
+          else:
+            glitched_spd_flag = 'A'
+      
+      except Exception:
+          glitched_spd_flag = 'M'
+
+    elif results1[each_glitch] == [] or results2[each_glitch] == []:
+      glitched_spd = None
+      glitched_spd_flag = 'M'
+
+      # throw b or n flag if speed or mag is less than detection limits
+                    
+    if glitched_spd < 1.0 and glitched_spd > 0.3:
+        glitched_spd_flag = "B"
+    elif glitched_spd <= 0.3:
+        glitched_spd_flag = "N"
+    else:
+        pass
+      
+    final_glitch[each_glitch] = {'mean': glitched_spd, 'flags': glitched_spd_flag}
+
+def create_glitched_dirs(results1, results2, results_flags):
   """ using speed and dir for dir"""
   final_glitch = {}
 
@@ -245,8 +298,39 @@ def create_glitched_dirs(results1, results2, results_flags2):
 
       num_valid_obs = len(results1[each_glitch])
 
-      # theta_u = math.atan2(sum([float(speed) * math.sin(math.radians(float(x))) for (speed, x) in itertools.izip(results1[each_glitch]['attr'], results2[each_date]['attr']) if speed != 'None' and x != 'None'])/num_valid_obs, sum([float(speed) * math.cos(math.radians(float(x))) for (speed, x) in itertools.izip(results1[each_date]['attr'],results2['attr']) if speed != 'None' and x != 'None'])/num_valid_obs)
-  return num_valid_obs 
+      # computes the wind direction
+      theta_u = math.atan2(sum([float(speed) * math.sin(math.radians(float(x))) for (speed, x) in itertools.izip(results1[each_glitch], results2[each_glitch]) if speed != 'None' and x != 'None'])/num_valid_obs, sum([float(speed) * math.cos(math.radians(float(x))) for (speed, x) in itertools.izip(results1[each_glitch],results2[each_glitch]) if speed != 'None' and x != 'None'])/num_valid_obs)
+  
+      glitched_dir = round(math.degrees(theta_u),3)
+
+      try:
+        num_flags = len(results_flags[each_glitch])
+        if ['E','M','Q'] not in results_flags[each_glitch]:
+          flagged_val = 'A'
+        else:
+          numM = len([x for x in results_flags[each_glitch] if x == 'M'])
+          numE = len([x for x in results_flags[each_glitch] if x == 'E'])
+          numQ = len([x for x in results_flags[each_glitch] if x == 'Q'])
+
+          if numM/num_flags > 0.8:
+            flagged_val = 'M'
+          elif numE/num_flags > 0.05:
+            flagged_val = 'E'
+          elif (numE + numM + numQ)/num_flags > 0.05:
+            flagged_val = 'Q'
+          else:
+            flagged_val = 'A'
+      
+      except Exception:
+          flagged_val = 'M'
+
+    elif results1[each_glitch] == [] or results2[each_glitch] == []:
+      meanval = None
+      flagged_val = 'M'
+
+    final_glitch[each_glitch] = {'mean': glitched_dir, 'flags': flagged_val}
+
+  return final_glitch
 
 def create_glitched_output(results, results_flags):
   """hum rocky theme joyfully do -dee do do"""
@@ -256,12 +340,12 @@ def create_glitched_output(results, results_flags):
 
     if results[each_glitch] != []:
 
-      meanval = round( sum(results[each_glitch])/len(glitched_dict[each_glitch]),2)
+      meanval = round( sum(results[each_glitch])/len(results[each_glitch]),2)
 
       try:
         num_flags = len(results_flags[each_glitch])
         if ['E','M','Q'] not in results_flags[each_glitch]:
-          flaggedval = 'A'
+          flagged_val = 'A'
         else:
           numM = len([x for x in results_flags[each_glitch] if x == 'M'])
           numE = len([x for x in results_flags[each_glitch] if x == 'E'])
@@ -282,11 +366,76 @@ def create_glitched_output(results, results_flags):
 
     elif results[each_glitch] == []:
       meanval = None
-      flaggedval = 'M'
+      flagged_val = 'M'
 
-    final_glitch[each_glitch] = {'mean': meanval, 'flags': flaggedval}
+    final_glitch[each_glitch] = {'mean': meanval, 'flags': flagged_val}
 
   return final_glitch
+
+def csv_that_glitch(final_glitch, csvfilename = "sample_glitch_csv.csv"):
+  """ create a csv for the glitch. pass 1 parameter of csvfilename = <blah> if you want to name it"""
+
+  with open(csvfilename, 'wb') as writefile:
+    writer = csv.writer(writefile)
+
+    dates = [datetime.datetime.strftime(x,'%Y-%m-%d %H:%M:%S') for x in sorted(final_glitch.keys())]
+    vals= [final_glitch[x]['mean'] for x in dates]
+    flags = [final_glitch[x]['flags'] for x in dates]
+
+    writer.writerow(['DATE_TIME', 'GLITCHED_MEAN', 'GLITCHED_FLAG'])
+    for index, each_date in enumerate(dates):
+      writer.writerow(each_date, vals[index], flags[index])
+
+  print("Glitched csv -- completed!")
+
+def csv_that_windy_glitch(final_glitch, csvfilename="sample_windy_glitch_csv.csv"):
+  """ when glitcher gets a windy glitch this method will handle it """
+
+  with open(csvfilename, 'wb') as writefile:
+    writer = csv.writer(writefile)
+    writer.writerow(['DATE','GLITCHED_SPD_MEAN','GLITCHED_SPD_FLAG','GLITCHED_DIR_MEAN','GLITCHED_DIR_FLAG','GLITCHED_MAG_MEAN','GLITCHED_MAG_FLAG'])
+    dates = [datetime.datetime.strftime(x,'%Y-%m-%d %H:%M:%S') for x in sorted(final_glitch[0].keys())]
+    vals_spd= [final_glitch[0][x]['mean'] for x in dates]
+    flags_spd = [final_glitch[0][x]['flags'] for x in dates]
+
+    vals_dir= [final_glitch[1][x]['mean'] for x in dates]
+    flags_dir = [final_glitch[1][x]['flags'] for x in dates]
+
+    vals_mag= [final_glitch[2][x]['mean'] for x in dates]
+    flags_mag = [final_glitch[2][x]['flags'] for x in dates]
+
+    for index, each_date in enumerate(dates):
+      writer.writerow(each_date, vals_spd[index], flags_spd[index], vals_dir[index], flags_dir[index], vals_mag[index], flags_mag[index])
+  
+  print("Windy Glitch csv -- completed!")
+
+
+def csv_that_sonic_glitch(final_glitch, csvfilename="sample_sonic_glitch_csv.csv"):
+  """ when glitcher gets a sonic glitch, this method will handle it """
+
+  with open(csvfilename, 'wb') as writefile:
+    writer = csv.writer(writefile)
+    writer.writerow(['DATE','GLITCHED_SPD_MEAN','GLITCHED_SPD_FLAG','GLITCHED_DIR_MEAN','GLITCHED_DIR_FLAG','GLITCHED_UX_MEAN','GLITCHED_UX_FLAG', 'GLITCHED_UY_MEAN', 'GLITCHED_UY_FLAG', 'GLITCHED_AIR_MEAN', 'GLITCHED_AIR_FLAG'])
+    dates = [datetime.datetime.strftime(x,'%Y-%m-%d %H:%M:%S') for x in sorted(final_glitch[0].keys())]
+    vals_spd= [final_glitch[0][x]['mean'] for x in dates]
+    flags_spd = [final_glitch[0][x]['flags'] for x in dates]
+
+    vals_dir= [final_glitch[1][x]['mean'] for x in dates]
+    flags_dir = [final_glitch[1][x]['flags'] for x in dates]
+
+    vals_ux= [final_glitch[2][x]['mean'] for x in dates]
+    flags_ux = [final_glitch[2][x]['flags'] for x in dates]
+
+    vals_uy= [final_glitch[3][x]['mean'] for x in dates]
+    flags_uy = [final_glitch[3][x]['flags'] for x in dates]
+
+    vals_air= [final_glitch[4][x]['mean'] for x in dates]
+    flags_air = [final_glitch[4][x]['flags'] for x in dates]
+
+    for index, each_date in enumerate(dates):
+        writer.writerow(each_date, vals_spd[index], flags_spd[index], vals_dir[index], flags_dir[index], vals_ux[index], flags_ux[index], vals_uy[index], flags_uy[index], vals_air[index], flags_air[index])
+
+  print("Sonic Glitch csv -- completed!")
 
 def html_that_glitch(final_glitch):
   """ makes some lists"""
@@ -357,6 +506,6 @@ if __name__ == "__main__":
 
   finalz = create_glitched_output(glitched_dict, glitched_flags)
   html_that_glitch(finalz)
-
+  csv_that_glitch(finalz)
 
   print finalz

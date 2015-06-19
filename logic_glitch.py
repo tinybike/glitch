@@ -1,5 +1,5 @@
 #!usr/bin/python
-
+import yaml
 import pymssql
 import time
 import datetime
@@ -9,6 +9,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 from glitch import glitchme as glitchme
 from glitch import create_glitched_output as finalize
+from glitch import create_glitched_dirs
+from glitch import create_glitched_speeds
+import math
 
 # drange is global function, super useful
 def drange(start, stop, step):
@@ -18,12 +21,18 @@ def drange(start, stop, step):
       yield r
       r += step
 
+def connect():
+    ''' connect to the fsdbdata database'''
+    conn = pymssql.connect(server = 'stewartia.forestry.oregonstate.edu:1433', user='ltermeta', password='$CFdb4LterWeb!')
+    cursor = conn.cursor()
+
+    return conn, cursor
 
 class Glitcher(object):
 
     """ generic class for all the glitched things. u is the yaml file that is open """
 
-    def __init__(self, u, name, startdate, enddate, interval):
+    def __init__(self, table, name, startdate, enddate, interval):
         self.table = table
         self.name = name
         self.startdate = startdate
@@ -31,17 +40,20 @@ class Glitcher(object):
         self.interval = interval
         _, self.cursor = connect()
 
-    def connect():
-        ''' connect to the fsdbdata database'''
-        conn = pymssql.connect(server = 'stewartia.forestry.oregonstate.edu:1433', user='ltermeta', password='$CFdb4LterWeb!')
-        cursor = conn.cursor()
+    def get_yaml(self):
+        strfilename = self.table[0:5] + ".yml"
+        u = yaml.load(open(strfilename,'r'))
+        return u
 
-        return conn, cursor
 
-    def get_data_in_range(selected_probe):
+    def get_data_in_range(self, u):
         """ special cases on wind, nr, snc """
 
         if self.table in ['MS04314','MS00114']:
+            valid_data = {}
+            valid_data2 = {}
+            valid_data3 = {}
+
             # special cases on wind - break into three glitches, then do special finalize
             flag_mag_word = [x for x in u[self.table]['mean_words'] if 'FLAG' in x and 'MAG' in x][0]
             val_mag_word = [x for x in u[self.table]['mean_words'] if 'FLAG' not in x and 'MAG' in x][0]
@@ -50,11 +62,11 @@ class Glitcher(object):
             flag_dir_word = [x for x in u[self.table]['mean_words'] if 'FLAG' in x and 'DIR' in x][0]
             val_dir_word = [x for x in u[self.table]['mean_words'] if 'FLAG' not in x and 'DIR' in x][0]
 
-            query = "select " + u[self.table]['date_word'] +", " + val_spd_word + ", " + flag_spd_word + ", " + val_mag_word + ", " + flag_mag_word + ", " val_dir_word + ", " + flag_dir_word + " from fsdbdata.dbo." + self.table + " where " + u[self.table]['date_word'] + " >= \'" + u.startdate + "\' and " + u[self.table]['date_word'] + " < \'" + u.enddate + "\' and " + u[self.table]['probe_word'] + " like \'" + selected_probe + "\'"
+            query = "select " + u[self.table]['date_word'] +", " + val_spd_word + ", " + flag_spd_word + ", " + val_mag_word + ", " + flag_mag_word + ", " + val_dir_word + ", " + flag_dir_word + " from fsdbdata.dbo." + self.table + " where " + u[self.table]['date_word'] + " >= \'" + self.startdate + "\' and " + u[self.table]['date_word'] + " < \'" + self.enddate + "\' and " + u[self.table]['probe_word'] + " like \'" + self.name + "\'"
 
-            cursor.execute(query)
+            self.cursor.execute(query)
 
-            for row in cursor:
+            for row in self.cursor:
                 dt = datetime.datetime.strptime(str(row[0]), '%Y-%m-%d %H:%M:%S')
 
                 # mag
@@ -81,6 +93,11 @@ class Glitcher(object):
             return valid_data, valid_data2, valid_data3
 
         elif self.table in ['MS04334', 'MS00134']:
+            valid_data = {}
+            valid_data2 = {}
+            valid_data3 = {}
+            valid_data4 = {}
+            valid_data5 = {}
             # special cases on snc
             flag_ux_word = [x for x in u[self.table]['mean_words'] if 'FLAG' in x and 'UX' in x][0]
             val_ux_word = [x for x in u[self.table]['mean_words'] if 'FLAG' not in x and 'UX' in x][0]
@@ -93,11 +110,11 @@ class Glitcher(object):
             flag_air_word = [x for x in u[self.table]['mean_words'] if 'FLAG' in x and 'AIR' in x][0]
             val_air_word = [x for x in u[self.table]['mean_words'] if 'FLAG' not in x and 'AIR' in x][0]
 
-            query = "select " + u[self.table]['date_word'] +", " + val_spd_word + ", " + flag_spd_word + ", " + val_ux_word + ", " + flag_ux_word + ", " + val_uy_word + ", " + flag_uy_word + "," + val_dir_word + ", " + flag_dir_word + ", " + val_air_word + ", " + flag_air_word +" from fsdbdata.dbo." + self.table + " where " + u[self.table]['date_word'] + " >= \'" + u.startdate + "\' and " + u[self.table]['date_word'] + " < \'" + u.enddate + "\' and " + u[self.table]['probe_word'] + " like \'" + selected_probe + "\'"
+            query = "select " + u[self.table]['date_word'] +", " + val_spd_word + ", " + flag_spd_word + ", " + val_ux_word + ", " + flag_ux_word + ", " + val_uy_word + ", " + flag_uy_word + "," + val_dir_word + ", " + flag_dir_word + ", " + val_air_word + ", " + flag_air_word +" from fsdbdata.dbo." + self.table + " where " + u[self.table]['date_word'] + " >= \'" + self.startdate + "\' and " + u[self.table]['date_word'] + " < \'" + self.enddate + "\' and " + u[self.table]['probe_word'] + " like \'" + self.name + "\'"
 
-            cursor.execute(query)
+            self.cursor.execute(query)
 
-            for row in cursor:
+            for row in self.cursor:
 
                 dt = datetime.datetime.strptime(str(row[0]), '%Y-%m-%d %H:%M:%S')
 
@@ -137,15 +154,16 @@ class Glitcher(object):
             return valid_data, valid_data2, valid_data3, valid_data4, valid_data5
 
         elif self.table in ['MS04335', 'MS00135']:
+            valid_data = {}
             # special cases on nr
             flag_tot_word = [x for x in u[self.table]['mean_words'] if 'FLAG' in x and 'TOT' in x][0]
             val_tot_word = [x for x in u[self.table]['mean_words'] if 'FLAG' not in x and 'TOT' in x][0]
 
-            query = "select " + u[self.table]['date_word'] +", " + val_tot_word + ", " + flag_tot_word + " from fsdbdata.dbo." + self.table + " where " + u[self.table]['date_word'] + " >= \'" + u.startdate + "\' and " + u[self.table]['date_word'] + " < \'" + u.enddate + "\' and " + u[self.table]['probe_word'] + " like \'" + selected_probe + "\'"
+            query = "select " + u[self.table]['date_word'] +", " + val_tot_word + ", " + flag_tot_word + " from fsdbdata.dbo." + self.table + " where " + u[self.table]['date_word'] + " >= \'" + self.startdate + "\' and " + u[self.table]['date_word'] + " < \'" + self.enddate + "\' and " + u[self.table]['probe_word'] + " like \'" + self.name + "\'"
 
-            cursor.execute(query)
+            self.cursor.execute(query)
 
-            for row in cursor:
+            for row in self.cursor:
                 dt = datetime.datetime.strptime(str(row[0]), '%Y-%m-%d %H:%M:%S')
                 
                 if dt not in valid_data:
@@ -158,15 +176,16 @@ class Glitcher(object):
             return valid_data
 
         else:
+            valid_data = {}
             # flags and values
             flag_word = [x for x in u[self.table]['mean_words'] if 'FLAG' in x][0]
             val_word = [x for x in u[self.table]['mean_words'] if 'FLAG' not in x][0]
 
-            query = "select " + u[self.table]['date_word'] + ", " + val_word + ", " + flag_word + " from fsdbdata.dbo." + self.table + " where " + u[self.table]['date_word'] + " >= \'" + u.startdate + "\' and " + u[self.table]['date_word'] + " < \'" + u.enddate + "\' and " + u[self.table]['probe_word'] + " like \'" + selected_probe + "\'"
+            query = "select " + u[self.table]['date_word'] + ", " + val_word + ", " + flag_word + " from fsdbdata.dbo." + self.table + " where " + u[self.table]['date_word'] + " >= \'" + self.startdate + "\' and " + u[self.table]['date_word'] + " < \'" + self.enddate + "\' and " + u[self.table]['probe_word'] + " like \'" + self.name + "\'"
 
-            cursor.execute(query)
+            self.cursor.execute(query)
 
-            for row in cursor:
+            for row in self.cursor:
                 dt = datetime.datetime.strptime(str(row[0]), '%Y-%m-%d %H:%M:%S')
 
                 if dt not in valid_data:
@@ -180,22 +199,106 @@ class Glitcher(object):
 
     def glitchinate(self, my_valid_data):
         """ compute the glitches except wind-- even solar glitch is ok"""
-        results, results_flags = glitchme(my_valid_data, interval)
+        results, results_flags = glitchme(my_valid_data, self.interval)
         final_glitch = finalize(results, results_flags)
         return final_glitch
 
+    def glitchinate_wind(self, my_valid_data_spd, my_valid_data_dir, my_valid_data_mag):
+        
+        # speed
+        results_spd, results_flags_spd = glitchme(my_valid_data_spd, self.interval)
+        # dir
+        results_dir, results_flags_dir = glitchme(my_valid_data_dir, self.interval)
+        # mag
+        results_mag, results_flags_mag = glitchme(my_valid_data_mag, self.interval)
 
-    def glitchinate_dirs(self, speed, direction):
-        theta_u = math.atan2(sum([float(speed) * math.sin(math.radians(float(x))) for (speed, x) in itertools.izip(speed[each_glitch]['spd_val'], self.od[probe_code][each_date]['dir_val']) if speed != 'None' and x != 'None'])/num_valid_obs_spd, sum([float(speed) * math.cos(math.radians(float(x))) for (speed, x) in itertools.izip(self.od[probe_code][each_date]['spd_val'],self.od[probe_code][each_date]['dir_val']) if speed != 'None' and x != 'None'])/num_valid_obs_spd)
+        final_glitch_spd = create_glitched_speeds(results_spd, results_dir, results_flags_spd)
+        final_glitch_dir = create_glitched_dirs(results_spd, results_dir, results_flags_dir)
+        final_glitch_mag = finalize(results_mag, results_flags_mag)
+
+        return (final_glitch_spd, final_glitch_dir, final_glitch_mag)
+
+    def glitchinate_sonic(self, my_valid_data_ux, my_valid_data_spd, my_valid_data_dir, my_valid_data_uy, my_valid_data_air):
+        # speed
+        results_spd, results_flags_spd = glitchme(my_valid_data_spd, self.interval)
+        # dir
+        results_dir, results_flags_dir = glitchme(my_valid_data_dir, self.interval)
+        # ux
+        results_ux, results_flags_ux = glitchme(my_valid_data_ux, self.interval)
+        # uy
+        results_uy, results_flags_uy = glitchme(my_valid_data_uy, self.interval)
+        # air
+        results_air, results_flags_air = glitchme(my_valid_data_air, self.interval)
+
+        final_glitch_spd = create_glitched_speeds(results_spd, results_dir, results_flags_spd)
+        final_glitch_dir = create_glitched_dirs(results_spd, results_dir, results_flags_dir)
+        final_glitch_ux = finalize(results_ux, results_flags_ux)
+        final_glitch_uy = finalize(results_uy, results_flags_uy)
+        final_glitch_air = finalize(results_air, results_flags_air)
+
+        return (final_glitch_spd, final_glitch_dir, final_glitch_ux, final_glitch_uy, final_glitch_air)
+
+    def decide(self):
+
+        if self.table in ['MS04314', 'MS00114']:
+            u1 = self.get_yaml()
+            try:
+                vd1, vd2, vd3 = self.get_data_in_range(u1)
+                fg = self.glitchinate_wind(vd1, vd2, vd3)
+            except IndexError:
+                print "<html><body><b> Error: data not found in range </b></body></html>"
+                fg = []
+        elif self.table in ['MS04334']:
+            u1 = self.get_yaml()
+            try:
+                vd1, vd2, vd3, vd4, vd5 = self.get_data_in_range(u1)
+                fg = self.glitchinate_sonic(vd1, vd2, vd3, vd4, vd5)
+            except IndexError:
+                print "<html><body><b> Error: data not found in range </b></body></html>"
+                fg = []
+        else:
+            u1 = self.get_yaml()
+            try:
+                vd1 = self.get_data_in_range(u1)
+                fg = self.glitchinate(vd1)
+            except IndexError:
+                print "<html><body><b> Error: data not found in range </b></body></html>"
+                fg = []
+
+        return fg
 
 
+class newGlitch(Glitcher):
+    def __init__(self, table, name, startdate, enddate, interval):
 
-class PrettyBackground(object):
+        super(newGlitch, self).__init__(table, name, startdate, enddate, interval)
 
-    """ generic class for plotting Glitchers against one another"""
+    def glitchinate(self):
+        final_glitch =  super(newGlitch).decide()
+        return final_glitch
 
-    def __init__(self)
-        import matplotlib.pyplot as plt
-        import numpy as np
-        self.GlitcherArray = []
+    def tocsv(self, final_glitch, csvfilename):
+
+        if self.table not in ['MS04314', 'MS00114', 'MS04334']:
+            import csv_that_glitch from glitch
+            csv_that_glitch(final_glitch, csvfilename)
+
+        elif self.table in ['MS04314', 'MS00114']:
+            import csv_that_windy_glitch from glitch:
+            csv_that_windy_glitch(final_glitch, csvfilename)
+            
+        elif self.table == 'MS04334':
+            import csv_that_sonic_glitch from glitch:
+            csv_that_sonic_glitch(final_glitch, csvfilename)
+            
+
+
+# class PrettyBackground(object):
+
+#     """ generic class for plotting Glitchers against one another"""
+
+#     def __init__(self)
+#         import matplotlib.pyplot as plt
+#         import numpy as np
+#         self.GlitcherArray = []
         
