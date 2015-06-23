@@ -1,5 +1,5 @@
 #!usr/bin/python
-
+import csv
 import pymssql
 import time
 import datetime
@@ -149,10 +149,10 @@ def glitchme(valid_data, interval):
   minrange = drange(dr[0], dr[-1], datetime.timedelta(minutes=1))
 
   # Get all values which have valid data
-  val = [round(float(valid_data[x]['attr']),3) for x in sorted(valid_data.keys()) if valid_data[x] != 'None']
+  val = [round(float(valid_data[x]['attr']),3) for x in sorted(valid_data.keys()) if valid_data[x]['attr'] != 'None' and valid_data[x]['attr'] != None]
 
   # Get all flags associated with the valid data
-  fval = [valid_data[x]['flag'] for x in sorted(valid_data.keys()) if valid_data[x] != 'None']
+  fval = [valid_data[x]['flag'] for x in sorted(valid_data.keys()) if valid_data[x]['attr'] != 'None' and valid_data[x]['attr'] != None]
 
   # Define an iterator to move across the measurements, even if they are not the same in time length
   efficient_iterator = itertools.izip(dr[0:-1],dr[1:])
@@ -287,7 +287,9 @@ def create_glitched_speeds(results1, results2, results_flags):
     else:
         pass
       
-    final_glitch[each_glitch] = {'mean': glitched_spd, 'flags': glitched_spd_flag}
+    final_glitch[each_glitch] = {'mean': round(glitched_spd,2), 'flags': glitched_spd_flag}
+
+  return final_glitch
 
 def create_glitched_dirs(results1, results2, results_flags):
   """ using speed and dir for dir"""
@@ -328,7 +330,7 @@ def create_glitched_dirs(results1, results2, results_flags):
       meanval = None
       flagged_val = 'M'
 
-    final_glitch[each_glitch] = {'mean': glitched_dir, 'flags': flagged_val}
+    final_glitch[each_glitch] = {'mean': round(glitched_dir,2), 'flags': flagged_val}
 
   return final_glitch
 
@@ -374,68 +376,160 @@ def create_glitched_output(results, results_flags):
 
 def csv_that_glitch(final_glitch, csvfilename = "sample_glitch_csv.csv"):
   """ create a csv for the glitch. pass 1 parameter of csvfilename = <blah> if you want to name it"""
+  csv_list = []
+  print final_glitch
 
   with open(csvfilename, 'wb') as writefile:
     writer = csv.writer(writefile)
 
+    raw_dates = [x for x in sorted(final_glitch.keys())]
     dates = [datetime.datetime.strftime(x,'%Y-%m-%d %H:%M:%S') for x in sorted(final_glitch.keys())]
-    vals= [final_glitch[x]['mean'] for x in dates]
-    flags = [final_glitch[x]['flags'] for x in dates]
+    try:
+      vals= [final_glitch[x]['mean'] for x in dates]
+    except Exception:
+      vals = [final_glitch[x]['mean'] for x in raw_dates]
+    try:
+      flags = [final_glitch[x]['flags'] for x in dates]
+    except Exception:
+      flags = [final_glitch[x]['flags'] for x in raw_dates]
 
     writer.writerow(['DATE_TIME', 'GLITCHED_MEAN', 'GLITCHED_FLAG'])
+    csv_list.append("<br> DATE_TIME, GLITCHED_MEAN, GLITCHED_FLAG </br>")
+    
     for index, each_date in enumerate(dates):
-      writer.writerow(each_date, vals[index], flags[index])
+      writer.writerow([each_date, vals[index], flags[index]])
+      csv_list.append("<br>" + each_date + "," + str(vals[index]) +", " + flags[index] +"</br>")
 
   print("Glitched csv -- completed!")
+  return csv_list
 
-def csv_that_windy_glitch(final_glitch, csvfilename="sample_windy_glitch_csv.csv"):
+def csv_that_windy_glitch(final_glitch1, final_glitch2, final_glitch3, csvfilename="sample_windy_glitch_csv.csv"):
   """ when glitcher gets a windy glitch this method will handle it """
+  
+  #import pdb; pdb.set_trace()
+  csv_list = []
 
   with open(csvfilename, 'wb') as writefile:
     writer = csv.writer(writefile)
+
+    raw_dates = [x for x in sorted(final_glitch1.keys())]
+    dates = [datetime.datetime.strftime(x,'%Y-%m-%d %H:%M:%S') for x in sorted(final_glitch1.keys())]
+
+    print final_glitch1
+    try:
+      vals_spd= [final_glitch1[x]['mean'] for x in dates]
+    except Exception:
+      vals_spd= [final_glitch1[x]['mean'] for x in raw_dates]
+
+    try:
+      flags_spd = [final_glitch1[x]['flags'] for x in dates]
+    except Exception:
+      flags_spd = [final_glitch1[x]['flags'] for x in raw_dates]
+
+    try:
+      vals_dir= [final_glitch2[x]['mean'] for x in dates]
+    except Exception:
+      vals_dir= [final_glitch2[x]['mean'] for x in raw_dates]
+
+    try:
+      flags_dir = [final_glitch2[x]['flags'] for x in dates]
+    except Exception:
+      flags_dir = [final_glitch2[x]['flags'] for x in raw_dates]
+
+    try:
+      vals_mag = [final_glitch3[x]['mean'] for x in dates]
+    except Exception:
+      vals_mag = [final_glitch3[x]['mean'] for x in raw_dates]
+
+    try:
+      flags_mag = [final_glitch3[x]['flags'] for x in dates]
+    except Exception:
+      flags_mag = [final_glitch3[x]['flags'] for x in raw_dates]
+
     writer.writerow(['DATE','GLITCHED_SPD_MEAN','GLITCHED_SPD_FLAG','GLITCHED_DIR_MEAN','GLITCHED_DIR_FLAG','GLITCHED_MAG_MEAN','GLITCHED_MAG_FLAG'])
-    dates = [datetime.datetime.strftime(x,'%Y-%m-%d %H:%M:%S') for x in sorted(final_glitch[0].keys())]
-    vals_spd= [final_glitch[0][x]['mean'] for x in dates]
-    flags_spd = [final_glitch[0][x]['flags'] for x in dates]
-
-    vals_dir= [final_glitch[1][x]['mean'] for x in dates]
-    flags_dir = [final_glitch[1][x]['flags'] for x in dates]
-
-    vals_mag= [final_glitch[2][x]['mean'] for x in dates]
-    flags_mag = [final_glitch[2][x]['flags'] for x in dates]
+    csv_list.append("<br> DATE, GLITCHED_SPD_MEAN, GLITCHED_SPD_FLAG, GLITCHED_DIR_MEAN, GLITCHED_DIR_FLAG, GLITCHED_MAG_MEAN, GLITCHED_MAG_FLAG </br>")
 
     for index, each_date in enumerate(dates):
-      writer.writerow(each_date, vals_spd[index], flags_spd[index], vals_dir[index], flags_dir[index], vals_mag[index], flags_mag[index])
-  
+      print index
+      print each_date
+      writer.writerow([each_date, vals_spd[index], flags_spd[index], vals_dir[index], flags_dir[index], vals_mag[index], flags_mag[index]])
+
+      csv_list.append("<br>" + each_date + ", " + str(vals_spd[index]) +", " + str(flags_spd[index]) + ", " + str(vals_dir[index]) + ", " + str(flags_dir[index]) + ", " + str(vals_mag[index]) + ", " + str(flags_mag[index]) +"</br>")
+
+    print csv_list
   print("Windy Glitch csv -- completed!")
+  return csv_list
 
-
-def csv_that_sonic_glitch(final_glitch, csvfilename="sample_sonic_glitch_csv.csv"):
+def csv_that_sonic_glitch(final_glitch1, final_glitch2, final_glitch3, final_glitch4, final_glitch5, csvfilename="sample_sonic_glitch_csv.csv"):
   """ when glitcher gets a sonic glitch, this method will handle it """
+
+  csv_list = []
 
   with open(csvfilename, 'wb') as writefile:
     writer = csv.writer(writefile)
     writer.writerow(['DATE','GLITCHED_SPD_MEAN','GLITCHED_SPD_FLAG','GLITCHED_DIR_MEAN','GLITCHED_DIR_FLAG','GLITCHED_UX_MEAN','GLITCHED_UX_FLAG', 'GLITCHED_UY_MEAN', 'GLITCHED_UY_FLAG', 'GLITCHED_AIR_MEAN', 'GLITCHED_AIR_FLAG'])
-    dates = [datetime.datetime.strftime(x,'%Y-%m-%d %H:%M:%S') for x in sorted(final_glitch[0].keys())]
-    vals_spd= [final_glitch[0][x]['mean'] for x in dates]
-    flags_spd = [final_glitch[0][x]['flags'] for x in dates]
+    csv_list.append("<br> DATE, GLITCHED_SPD_MEAN, GLITCHED_SPD_FLAG, GLITCHED_DIR_MEAN, GLITCHED_DIR_FLAG, GLITCHED_UX_MEAN, GLITCHED_UX_FLAG, GLITCHED_UY_MEAN, GLITCHED_UY_FLAG, GLITCHED_AIR_MEAN, GLITCHED_AIR_FLAG </br>")
+    
+    raw_dates = [x for x in sorted(final_glitch1.keys())]
+    dates = [datetime.datetime.strftime(x,'%Y-%m-%d %H:%M:%S') for x in sorted(final_glitch1.keys())]
 
-    vals_dir= [final_glitch[1][x]['mean'] for x in dates]
-    flags_dir = [final_glitch[1][x]['flags'] for x in dates]
+    try:
+      vals_spd= [final_glitch1[x]['mean'] for x in dates]
+    except Exception:
+      vals_spd= [final_glitch1[x]['mean'] for x in raw_dates]
 
-    vals_ux= [final_glitch[2][x]['mean'] for x in dates]
-    flags_ux = [final_glitch[2][x]['flags'] for x in dates]
+    try:
+      flags_spd = [final_glitch1[x]['flags'] for x in dates]
+    except Exception:
+      flags_spd = [final_glitch1[x]['flags'] for x in raw_dates]
 
-    vals_uy= [final_glitch[3][x]['mean'] for x in dates]
-    flags_uy = [final_glitch[3][x]['flags'] for x in dates]
+    try:
+      vals_dir= [final_glitch2[x]['mean'] for x in dates]
+    except Exception:
+      vals_dir= [final_glitch2[x]['mean'] for x in raw_dates]
 
-    vals_air= [final_glitch[4][x]['mean'] for x in dates]
-    flags_air = [final_glitch[4][x]['flags'] for x in dates]
+    try:
+      flags_dir = [final_glitch2[x]['flags'] for x in dates]
+    except Exception:
+      flags_dir = [final_glitch2[x]['flags'] for x in raw_dates]
+
+    try:
+      vals_ux= [final_glitch3[x]['mean'] for x in dates]
+    except Exception:
+      vals_ux= [final_glitch3[x]['mean'] for x in raw_dates]
+
+    try:
+      flags_ux = [final_glitch3[x]['flags'] for x in dates]
+    except Exception:
+      flags_ux = [final_glitch3[x]['flags'] for x in raw_dates]
+
+    try:
+      vals_uy= [final_glitch4[x]['mean'] for x in dates]
+    except Exception:
+      vals_uy= [final_glitch4[x]['mean'] for x in raw_dates]
+
+    try:
+      flags_uy = [final_glitch4[x]['flags'] for x in dates]
+    except Exception:
+      flags_uy = [final_glitch4[x]['flags'] for x in raw_dates]
+
+    try:
+      vals_air= [final_glitch5[x]['mean'] for x in dates]
+    except Exception:
+      vals_air= [final_glitch5[x]['mean'] for x in raw_dates]
+
+    try:
+      flags_air = [final_glitch5[x]['flags'] for x in dates]
+    except Exception:
+      flags_air = [final_glitch5[x]['flags'] for x in raw_dates]
 
     for index, each_date in enumerate(dates):
-        writer.writerow(each_date, vals_spd[index], flags_spd[index], vals_dir[index], flags_dir[index], vals_ux[index], flags_ux[index], vals_uy[index], flags_uy[index], vals_air[index], flags_air[index])
+      writer.writerow([each_date, vals_spd[index], flags_spd[index], vals_dir[index], flags_dir[index], vals_ux[index], flags_ux[index], vals_uy[index], flags_uy[index], vals_air[index], flags_air[index]])
+      csv_list.append("<br>" + each_date + ", " + str(vals_spd[index]) + ", " + flags_spd[index] + 
+        ", " + str(vals_dir[index]) + ", " + flags_dir[index] + ", " + str(vals_ux[index]) + ", " + flags_ux[index] + ", " + str(vals_uy[index]) + ", " + flags_uy[index] + ", " + str(vals_air[index]) + ", " + flags_air[index] + "</br>")
 
-  print("Sonic Glitch csv -- completed!")
+    print("Sonic Glitch csv -- completed!")
+    return csv_list
 
 def html_that_glitch(final_glitch):
   """ makes some lists"""

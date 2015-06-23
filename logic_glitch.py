@@ -11,6 +11,9 @@ from glitch import glitchme as glitchme
 from glitch import create_glitched_output as finalize
 from glitch import create_glitched_dirs
 from glitch import create_glitched_speeds
+from glitch import csv_that_glitch
+from glitch import csv_that_sonic_glitch
+from glitch import csv_that_windy_glitch
 import math
 
 # drange is global function, super useful
@@ -216,7 +219,7 @@ class Glitcher(object):
         final_glitch_dir = create_glitched_dirs(results_spd, results_dir, results_flags_dir)
         final_glitch_mag = finalize(results_mag, results_flags_mag)
 
-        return (final_glitch_spd, final_glitch_dir, final_glitch_mag)
+        return final_glitch_spd, final_glitch_dir, final_glitch_mag
 
     def glitchinate_sonic(self, my_valid_data_ux, my_valid_data_spd, my_valid_data_dir, my_valid_data_uy, my_valid_data_air):
         # speed
@@ -236,7 +239,7 @@ class Glitcher(object):
         final_glitch_uy = finalize(results_uy, results_flags_uy)
         final_glitch_air = finalize(results_air, results_flags_air)
 
-        return (final_glitch_spd, final_glitch_dir, final_glitch_ux, final_glitch_uy, final_glitch_air)
+        return final_glitch_spd, final_glitch_dir, final_glitch_ux, final_glitch_uy, final_glitch_air
 
     def decide(self):
 
@@ -244,52 +247,63 @@ class Glitcher(object):
             u1 = self.get_yaml()
             try:
                 vd1, vd2, vd3 = self.get_data_in_range(u1)
-                fg = self.glitchinate_wind(vd1, vd2, vd3)
+                fg1, fg2, fg3 = self.glitchinate_wind(vd1, vd2, vd3)
+
             except IndexError:
-                print "<html><body><b> Error: data not found in range </b></body></html>"
-                fg = []
+                return "<html><body><b> Error: data not found in range </b></body></html>"
+                fg1 = [], fg2 = [], fg3 = []
+            return fg1, fg2, fg3
+
         elif self.table in ['MS04334']:
             u1 = self.get_yaml()
             try:
                 vd1, vd2, vd3, vd4, vd5 = self.get_data_in_range(u1)
-                fg = self.glitchinate_sonic(vd1, vd2, vd3, vd4, vd5)
+                fg1, fg2, fg3, fg4, fg5 = self.glitchinate_sonic(vd1, vd2, vd3, vd4, vd5)
             except IndexError:
-                print "<html><body><b> Error: data not found in range </b></body></html>"
-                fg = []
+                return "<html><body><b> Error: data not found in range </b></body></html>"
+                fg1 = [], fg2 = [], fg3= [], fg4 = [], fg5 = []
+            return fg1, fg2, fg3, fg4, fg5
         else:
             u1 = self.get_yaml()
             try:
                 vd1 = self.get_data_in_range(u1)
                 fg = self.glitchinate(vd1)
             except IndexError:
-                print "<html><body><b> Error: data not found in range </b></body></html>"
+                return "<html><body><b> Error: data not found in range </b></body></html>"
                 fg = []
 
-        return fg
+            return fg
 
 
-class newGlitch(Glitcher):
+class SmartGlitcher(Glitcher):
+    """SmartGlitcher methods are used for smart aggregation, including with methods for the wind. """
+
     def __init__(self, table, name, startdate, enddate, interval):
 
-        super(newGlitch, self).__init__(table, name, startdate, enddate, interval)
+        super(SmartGlitcher, self).__init__(table, name, startdate, enddate, interval)
 
-    def glitchinate(self):
-        final_glitch =  super(newGlitch).decide()
-        return final_glitch
+    # def glitchinate_smart(self):
+    #     final_glitch =  self.decide()
+    #     return final_glitch
 
-    def tocsv(self, final_glitch, csvfilename):
+    def tocsv(self,csvfilename):
+        import csv
+
+        
 
         if self.table not in ['MS04314', 'MS00114', 'MS04334']:
-            import csv_that_glitch from glitch
-            csv_that_glitch(final_glitch, csvfilename)
+            final_glitch = self.decide()
+            web_csv = csv_that_glitch(final_glitch, csvfilename)
 
         elif self.table in ['MS04314', 'MS00114']:
-            import csv_that_windy_glitch from glitch:
-            csv_that_windy_glitch(final_glitch, csvfilename)
+            final_glitch1, final_glitch2, final_glitch3 = self.decide()
+            web_csv = csv_that_windy_glitch(final_glitch1, final_glitch2, final_glitch3, csvfilename)
             
         elif self.table == 'MS04334':
-            import csv_that_sonic_glitch from glitch:
-            csv_that_sonic_glitch(final_glitch, csvfilename)
+            final_glitch1, final_glitch2, final_glitch3, final_glitch4, final_glitch5= self.decide()
+            web_csv = csv_that_sonic_glitch(final_glitch1, final_glitch2, final_glitch3, final_glitch4, final_glitch5, csvfilename)
+
+        return web_csv
             
 
 

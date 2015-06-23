@@ -92,22 +92,24 @@ def all_get_references(cursor, od):
                 method_words =[x for x in lon if 'METHOD' in x]
                 
                 if len(mean_words) >= 1:
-                   
-                    print "yay, we have mean words"
-                    print mean_words
-                    print method_words
 
                     # this only needs to be processed one time, so let's get it right
                     startdaydict, enddaydict = epic_query(cursor, my_attribute, probe_word, date_word)
-                
-                if my_attribute not in schema_d:
-                    schema_d[my_attribute] ={'startdaydict': startdaydict, 'enddaydict': enddaydict, 'probe_word': probe_word, 'mean_words': mean_words, 'method_words': method_words, 'date_word': date_word}
-                elif my_attribute in schema_d:
-                    print "my attribute should not already be here?"
-                    import pdb; pdb.set_trace()
+
+                    if my_attribute not in schema_d:
+                        schema_d[my_attribute] ={'startdaydict': startdaydict, 'enddaydict': enddaydict, 'probe_word': probe_word, 'mean_words': mean_words, 'method_words': method_words, 'date_word': date_word}
+                    
+                    elif my_attribute in schema_d:
+                        print "my attribute should not already be here?"
+                        import pdb; pdb.set_trace()
 
                 else:
-                    continue  
+                    del mean_words
+                    del probe_word
+                    del date_word
+                    del method_words
+                    continue 
+
             else:
                 print "It is only daily for the " + my_attribute
 
