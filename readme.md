@@ -1,19 +1,24 @@
 READ ME -- NewGlitch
 =========
 
-Version: 0.0.5
+Version: 0.0.6
 
 NewGlitch is a Python implementation of the original GLITCH program implemented in Perl. We felt that the original Perl program was pretty damn good, but unfortunately, with all the data we have and some inconsistencies in naming, the original program could not keep up with some breaking changes. I tried originally to just fix the Perl, but that turned out to be more difficult than I could handle and come to a solution, so NewGlitch was born.
 
-NewGlitch contains 2 key python scripts: glitch.py and logic_glitch.py. glitch.py is most of the "back end" functions which do the computation. logic_glitch.py contains a few useful functions, but mostly two classes, Glitcher and SmartGlitcher. SmartGlitcher is a "smart" output tool for Glitcher.  You could use just glitch.py to compute the glitches in a raw way, use just Glitcher to compute each attribute, or use SmartGlitcher to help you make nice clean outputs when you have evil input structures, like, uhm, sonic anemometers.
+NewGlitch contains 4 key python scripts: map_glitch.py, glitch.py, logic_glitch.py, and front_glitch.py. map_glitch.py builds the lookup tables (json and yaml) from the database. glitch.py is most of the "back end" functions which do the computation. logic_glitch.py contains a few useful functions, but mostly two classes, Glitcher and SmartGlitcher. SmartGlitcher is a "smart" output tool for Glitcher. front_glitch.py is a rough "front-end" for glitch. It is purely python and html, with some jquery. The python is excuted via the bottle microframework.
+
+NewGlitch is versitile. You could use just the glitch.py to compute the glitches in a raw way, use just Glitcher to compute each attribute, or use SmartGlitcher to help you make nice clean outputs when you have evil input structures, like, uhm, sonic anemometers.
 
 Components
 ------
 
 map_glitch.py - generates .yaml and .json files that map the glitcher program onto any possible data set it could use in our database. Right now we find about 7 data sets, although some of them, like TW006, aren't very interesting.
+
 glitch.py - does the maths
+
 front_glitch.py - uses the bottle framework to dynamically route requests -- in progress
-logic_glitch.py - controls the mapping of glitch onto yaml files to reduce the inputs needed-- i.e. instead of you needing to figure out, can I glitch this, and what attributes from it are glitchable, you can just use logic_glitch's Glitcher class and SmartGlitcher class to handle this, and if it seems out of date, just execute map_glitch.py
+
+logic_glitch.py - controls the mapping of glitch onto yaml files to reduce the inputs needed. SmartGlitcher will navigate which glitching methods to use.
 
 map_glitch.py
 ------------
@@ -26,12 +31,12 @@ Basically, it maps the production database to find things to glitch. Unlike the 
 
             output1 = all_build_dict(cursor)
 
-      This one has an array, "possible", which is the possible dbcodes that contain probe and datetime. It just helps you limit your search.
+This one has an array, "possible", which is the possible dbcodes that contain probe and datetime. It just helps you limit your search. I recommend that we possibly check some of entity_attribute, as it looks like we don't have an MV00105, but yet it is in some of these tables, and that could cause other people trouble in the future, too.
 
 
-            all_get_references(output1, cursor)
+      all_get_references(output1, cursor)
 
-      This one eats the output of the above, and can be further refined to fit the data. For example, we clean out entities that don't have DATE_TIME or DATETIME, but you might want to keep something like DT or TMSTAMP. We clean out ones that don't have MEAN as an attribute (because all MEAN have a MEAN FLAG with them right now), but you might want to keep around TOT or INST or something. You could add this if you wanted.
+This one eats the output of the above, and can be further refined to fit the data. For example, we clean out entities that don't have DATE_TIME or DATETIME, but you might want to keep something like DT or TMSTAMP. We clean out ones that don't have MEAN as an attribute (because all MEAN have a MEAN FLAG with them right now), but you might want to keep around TOT or INST or something. You could add this if you wanted.
 
 
 The main method of map_glitch can be run executable. 

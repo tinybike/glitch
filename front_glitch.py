@@ -17,6 +17,10 @@ def error404(error):
 def error403(error):
     return "Sorry, you cant access that resource"
 
+@error(500)
+def error500(error):
+    return "Looks like you've found a bug! Please email what you were trying to search for to fox AT tinybike DOT net"
+
 @route('/<filename:re:.*\.js>')
 def javascripts(filename):
     return static_file(filename, root='js/')
@@ -40,7 +44,7 @@ def show_json(dbcode):
 
         # put entities (i.e. MS04311) in alphabet order
         study_codes = sorted(data.keys())
-        print study_codes
+        
         # generate nested menus string for entities (MS043 > MS04311 > AIRCEN01)
         outer_list = []
 
@@ -97,7 +101,7 @@ def show_json(dbcode):
                     <meta name="viewport" content="width=device-width, initial-scale=1">
                     <meta name="description" content="A simple, client centric interface for newGlitch">
                     <meta name="author" content="The Saviors of SQL, Fox, Don, and Hans">
-                    <title>newGlitch | by Fox, Don, and Hans </title>
+                    <title> newGlitch | by Fox, Don, and Hans </title>
                     <link type="text/css" href="bootstrap.min.css" rel="stylesheet">
                     <link type="text/css" href="bootstrap-theme.min.css" rel="stylesheet">
                     <link rel="stylesheet" href="//code.jquery.com/ui/1.11.4/themes/smoothness/jquery-ui.css">
@@ -203,6 +207,8 @@ def show_json(dbcode):
     return myprint
 
 def parse_time(some_time):
+    """ Simple function for parsing the input time into only the hours and minutes"""
+
     list_time = some_time.split(':')
     hours = int(list_time[0])
     minutes = int(list_time[1])
@@ -211,6 +217,7 @@ def parse_time(some_time):
 
 @route('/<dbcode>', method='POST')
 def do_glitch(dbcode):
+    """ gets start date, end date, probe, end time, start time, interval, and entity from the form on the page to do the glitching with"""
     startdate = request.forms.get('startdate')
     enddate = request.forms.get('enddate')
     probe = request.forms.get('menu-selection')
@@ -219,31 +226,54 @@ def do_glitch(dbcode):
     interval = request.forms.get('interval')
     entity = request.forms.get('entity')
 
-    print entity
-
+    # parses the time into a time interval and the date into a date interval
     hstart, mstart = parse_time(starttime)
-    dstart = datetime.datetime.strptime(startdate,'%m/%d/%Y')
+    
+    try:
+        dstart = datetime.datetime.strptime(startdate,'%m/%d/%Y')
+    except Exception:
+        try:
+            dstart = datetime.datetime.strptime(startdate,'%Y-%m-%d')
+        except Exception:
+            return "<h1>You forgot to pass in a start date!</h1>"
+
     clean_start = datetime.datetime(dstart.year, dstart.month, dstart.day, hstart, mstart, 0)
 
     hend, mend = parse_time(endtime)
-    dend = datetime.datetime.strptime(enddate,'%m/%d/%Y')
+    try:
+        dend = datetime.datetime.strptime(enddate,'%m/%d/%Y')
+    except Exception:
+        try:
+            dend = datetime.datetime.strptime(enddate, '%Y-%m-%d')
+        except Exception:
+            return "<h1> You forgot to pass in an end date! </h1>"
+
     clean_end = datetime.datetime(dend.year, dend.month, dend.day, hend, mend, 0)
 
+    # protect user against inverting time
+    if clean_end <= clean_start:
+        return "<h2> You cannot glitch backwards in Time, Marty.</h2>"
+    else:
+        pass
+
+    # string "representations" for start and end
     rep_start = datetime.datetime.strftime(clean_start,'%Y-%m-%d %H:%M:%S')
     rep_end = datetime.datetime.strftime(clean_end, '%Y-%m-%d %H:%M:%S')
 
-
+    # glitch that crazy data
     TestG = SmartGlitcher(entity, probe, rep_start, rep_end, int(interval))
     output_csv = TestG.tocsv('my_test_glitch_from_app.csv')
     
     web_csv_write = "".join(output_csv)
     
     try:
-        return "<h3> newGlitch assembled values from " + rep_start + " to " + rep_end + " on " + probe + " glitched on an interval of " + interval + "minutes! </h3>" + web_csv_write
+        return "<h3> newGlitch assembled values from " + rep_start + " to " + rep_end + " on " + probe + " glitched on an interval of " + interval + " minutes! </h3>" + web_csv_write
     
     except Exception:
         # for debugging-- print to screen
         print rep_start, rep_end, probe, interval
-        return  "<h3> newGlitch assembled values from " + rep_start + " to " + rep_end + " on " + probe + " glitched on an interval of " + interval + "minutes! </h3>" + web_csv_write
+        return  "<h3> newGlitch assembled values from " + rep_start + " to " + rep_end + " on " + probe + " glitched on an interval of " + interval + " minutes! </h3>" + web_csv_write
 
+# use the first "run" for development, but deploy on the second one, which will not do hot code updates! also change the host to the right IP address.
 run(host='localhost', port=8080, reloader = True, debug=True)
+#run(host='localhost', port=8080)

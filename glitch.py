@@ -148,8 +148,10 @@ def glitchme(valid_data, interval):
   # Generate a range of one minute intervals from start to end of desired period
   minrange = drange(dr[0], dr[-1], datetime.timedelta(minutes=1))
 
+  print valid_data
   # Get all values which have valid data
   val = [round(float(valid_data[x]['attr']),3) for x in sorted(valid_data.keys()) if valid_data[x]['attr'] != 'None' and valid_data[x]['attr'] != None]
+
 
   # Get all flags associated with the valid data
   fval = [valid_data[x]['flag'] for x in sorted(valid_data.keys()) if valid_data[x]['attr'] != 'None' and valid_data[x]['attr'] != None]
@@ -160,13 +162,13 @@ def glitchme(valid_data, interval):
   # Compute the difference between each measurement and convert to minutes.
   tds = [(y-x).seconds/60 for (x,y) in efficient_iterator]
 
-
   # Special kind of interpolation in Glitch: chain together the tuples of number of 1 minute intervals * value of each, then zip this up to the date range at one min resolution, i.e. 1.8 at 1 min, 1.8 at 2 min, 1.8 at 3 min, 2.0 at 4 min, 2.0 at 5 min, etc.
   #one_minute_values = itertools.izip([p for p in minrange], list(itertools.chain.from_iterable([itertools.repeat(x,y) for (x,y) in itertools.izip(val[0:], tds)])))
 
   one_minute_values = itertools.izip([p for p in minrange],
   list(itertools.chain.from_iterable([itertools.repeat(x,y) for (x,y) in itertools.izip(val[0:], tds)])), list(itertools.chain.from_iterable([itertools.repeat(x,y) for (x,y) in itertools.izip(fval[0:], tds)])))
 
+  print one_minute_values
   """Now we have a value for every one minute interval- start with start time + 1 interval (for example if 45 minutes starting at noon the first stop point is 12:45), end with end time plus one interval (for example, if stop point is 10 pm and interval takes you to 10:45 this is the stop point), but don't go up to it if we don't complete that final interval (generator yields only until iteration must stop)"""
 
   # Generator for "stop points" for the new glitched interval i.e. every 35 minutes, etc.
@@ -365,7 +367,6 @@ def create_glitched_output(results, results_flags):
       except Exception:
           flagged_val = 'M'
 
-
     elif results[each_glitch] == []:
       meanval = None
       flagged_val = 'M'
@@ -373,6 +374,8 @@ def create_glitched_output(results, results_flags):
     final_glitch[each_glitch] = {'mean': meanval, 'flags': flagged_val}
 
   return final_glitch
+
+
 
 def csv_that_glitch(final_glitch, csvfilename = "sample_glitch_csv.csv"):
   """ create a csv for the glitch. pass 1 parameter of csvfilename = <blah> if you want to name it"""

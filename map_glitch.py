@@ -1,5 +1,4 @@
 #!usr/bin/python
-
 import pymssql
 import time
 import datetime
@@ -37,8 +36,8 @@ def get_entity_id(cursor, databaseid):
 
 def all_build_dict(cursor):  
     """ Possible schema which have a column containing 'probe'. Add to this list to make a more robust search space"""
-    
-    possible = ['MS043', 'MV001', 'TW006', 'MS001', 'MS005', 'TV025', 'HT004']
+    #possible = ['MV001', 'MS001', 'MS005', 'TV025', 'HT004']
+    possible = ['MS043', 'MV001', 'MS001', 'MS005', 'TV025', 'HT004']
 
     od = {}
 
@@ -51,7 +50,7 @@ def all_build_dict(cursor):
 
 
 def all_get_references(cursor, od):
-    """ getting all the possible probe, mean, and method names """
+    """ getting all the possible probe, mean, and method names. names that include 'mean' should also include 'flag'"""
 
     # for example, each_schema is like 'MS043' etc.
     for each_schema in od.keys():
@@ -62,6 +61,7 @@ def all_get_references(cursor, od):
         attr_list = od[each_schema].keys()
 
         for my_attribute in attr_list:
+
             # for example, 1731 may be MS04311 entity
             my_entity_id = str(od[each_schema][my_attribute]['entity_id'])
             
@@ -83,6 +83,7 @@ def all_get_references(cursor, od):
                 continue
 
             elif "DATE_TIME" in lon or "DATETIME" in lon:
+                
                 # what is the date word
                 date_word = [x for x in lon if 'DATE' in x][0]
                 
@@ -94,7 +95,10 @@ def all_get_references(cursor, od):
                 if len(mean_words) >= 1:
 
                     # this only needs to be processed one time, so let's get it right
-                    startdaydict, enddaydict = epic_query(cursor, my_attribute, probe_word, date_word)
+                    try:
+                        startdaydict, enddaydict = epic_query(cursor, my_attribute, probe_word, date_word)
+                    except Exception:
+                        continue
 
                     if my_attribute not in schema_d:
                         schema_d[my_attribute] ={'startdaydict': startdaydict, 'enddaydict': enddaydict, 'probe_word': probe_word, 'mean_words': mean_words, 'method_words': method_words, 'date_word': date_word}
@@ -139,6 +143,7 @@ def epic_query(cursor, my_attribute, probe_word, date_word):
     ends_by_probe = {}
 
     query = "with summary as (select p." + probe_word + ", p." + date_word + ", row_number() over(partition by p." + probe_word + " order by p." + date_word + " asc) as rk from fsdbdata.dbo." + my_attribute + " p) select s.* from summary s where s.rk = 1"
+    
     cursor.execute(query)
     for row in cursor:
         if str(row[0]) not in starts_by_probe:

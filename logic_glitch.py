@@ -15,6 +15,15 @@ from glitch import csv_that_glitch
 from glitch import csv_that_sonic_glitch
 from glitch import csv_that_windy_glitch
 import math
+import re
+
+def match_MS001_flag(input_string):
+    """ global match to flag pattern """
+
+    # F + wildcard + digit
+    m = re.compile('F.[1-9]')
+    res = m.match(input_string)
+    return res.group(0)
 
 # drange is global function, super useful
 def drange(start, stop, step):
@@ -52,18 +61,27 @@ class Glitcher(object):
     def get_data_in_range(self, u):
         """ special cases on wind, nr, snc """
 
-        if self.table in ['MS04314','MS00114']:
+        if self.table in ['MS04314', 'MS00114']:
             valid_data = {}
             valid_data2 = {}
             valid_data3 = {}
 
-            # special cases on wind - break into three glitches, then do special finalize
-            flag_mag_word = [x for x in u[self.table]['mean_words'] if 'FLAG' in x and 'MAG' in x][0]
-            val_mag_word = [x for x in u[self.table]['mean_words'] if 'FLAG' not in x and 'MAG' in x][0]
-            flag_spd_word = [x for x in u[self.table]['mean_words'] if 'FLAG' in x and 'SPD' in x][0]
-            val_spd_word = [x for x in u[self.table]['mean_words'] if 'FLAG' not in x and 'SPD' in x][0]
-            flag_dir_word = [x for x in u[self.table]['mean_words'] if 'FLAG' in x and 'DIR' in x][0]
             val_dir_word = [x for x in u[self.table]['mean_words'] if 'FLAG' not in x and 'DIR' in x][0]
+            val_mag_word = [x for x in u[self.table]['mean_words'] if 'FLAG' not in x and 'MAG' in x][0]
+            val_spd_word = [x for x in u[self.table]['mean_words'] if 'FLAG' not in x and 'SPD' in x][0]
+
+            # flag words are a little different on the old tables!
+            if self.table == 'MS00114':
+                flag_mag_word = 'FW3'
+                flag_spd_word = 'FW1'
+                flag_dir_word = 'FW5'
+            
+            else: 
+                # special cases on wind - break into three glitches, then do special finalize
+                flag_mag_word = [x for x in u[self.table]['mean_words'] if 'FLAG' in x and 'MAG' in x][0]  
+                flag_spd_word = [x for x in u[self.table]['mean_words'] if 'FLAG' in x and 'SPD' in x][0]
+                flag_dir_word = [x for x in u[self.table]['mean_words'] if 'FLAG' in x and 'DIR' in x][0]
+
 
             query = "select " + u[self.table]['date_word'] +", " + val_spd_word + ", " + flag_spd_word + ", " + val_mag_word + ", " + flag_mag_word + ", " + val_dir_word + ", " + flag_dir_word + " from fsdbdata.dbo." + self.table + " where " + u[self.table]['date_word'] + " >= \'" + self.startdate + "\' and " + u[self.table]['date_word'] + " < \'" + self.enddate + "\' and " + u[self.table]['probe_word'] + " like \'" + self.name + "\'"
 
@@ -95,12 +113,14 @@ class Glitcher(object):
 
             return valid_data, valid_data2, valid_data3
 
+
         elif self.table in ['MS04334', 'MS00134']:
             valid_data = {}
             valid_data2 = {}
             valid_data3 = {}
             valid_data4 = {}
             valid_data5 = {}
+
             # special cases on snc
             flag_ux_word = [x for x in u[self.table]['mean_words'] if 'FLAG' in x and 'UX' in x][0]
             val_ux_word = [x for x in u[self.table]['mean_words'] if 'FLAG' not in x and 'UX' in x][0]
@@ -179,10 +199,42 @@ class Glitcher(object):
             return valid_data
 
         else:
+
             valid_data = {}
+            
             # flags and values
-            flag_word = [x for x in u[self.table]['mean_words'] if 'FLAG' in x][0]
-            val_word = [x for x in u[self.table]['mean_words'] if 'FLAG' not in x][0]
+            if self.table[0:5] != 'MS001' and self.table[0:5] != 'HT004':
+                print "REL CEN IS NOT AN UNACCEPTABLE TABLE"
+                val_word = [x for x in u[self.table]['mean_words'] if 'FLAG' not in x][0]
+                flag_word = [x for x in u[self.table]['mean_words'] if 'FLAG' in x][0]
+            
+            elif self.table[0:5] == 'MS001':
+                lookup = {'MS00111': 'FT1',
+                            'MS00112': 'FR1',
+                            'MS00113': 'FP1',
+                            'MS00115': 'FS1',
+                            'MS00116': 'FM1',
+                            'MS00117': 'FD1',
+                            'MS00118': 'FV1',
+                            'MS00119': 'FL1',
+                            'MS00131': 'FST1',
+                            'MS00132': 'FPR1'}
+                
+                flag_word = lookup[self.table]
+            
+            # the HT series
+            elif self.table in ['HT00411', 'MS00511']:
+                flag_word = 'FT1'
+            elif self.table == 'HT0034':
+                flag_word = 'FWT1'
+            elif self.table == 'MS00512':
+                flag_word = 'FR1'
+            elif self.table == 'MS00531':
+                flag_word = 'FST1'
+            else:
+                pass
+
+            print val_word
 
             query = "select " + u[self.table]['date_word'] + ", " + val_word + ", " + flag_word + " from fsdbdata.dbo." + self.table + " where " + u[self.table]['date_word'] + " >= \'" + self.startdate + "\' and " + u[self.table]['date_word'] + " < \'" + self.enddate + "\' and " + u[self.table]['probe_word'] + " like \'" + self.name + "\'"
 
@@ -242,8 +294,10 @@ class Glitcher(object):
         return final_glitch_spd, final_glitch_dir, final_glitch_ux, final_glitch_uy, final_glitch_air
 
     def decide(self):
+        """ decide determines if an input is wind, regular, or sonic"""
 
         if self.table in ['MS04314', 'MS00114']:
+            
             u1 = self.get_yaml()
             try:
                 vd1, vd2, vd3 = self.get_data_in_range(u1)
@@ -252,9 +306,11 @@ class Glitcher(object):
             except IndexError:
                 return "<html><body><b> Error: data not found in range </b></body></html>"
                 fg1 = [], fg2 = [], fg3 = []
+            
             return fg1, fg2, fg3
 
         elif self.table in ['MS04334']:
+            
             u1 = self.get_yaml()
             try:
                 vd1, vd2, vd3, vd4, vd5 = self.get_data_in_range(u1)
@@ -263,6 +319,7 @@ class Glitcher(object):
                 return "<html><body><b> Error: data not found in range </b></body></html>"
                 fg1 = [], fg2 = [], fg3= [], fg4 = [], fg5 = []
             return fg1, fg2, fg3, fg4, fg5
+        
         else:
             u1 = self.get_yaml()
             try:
@@ -282,31 +339,27 @@ class SmartGlitcher(Glitcher):
 
         super(SmartGlitcher, self).__init__(table, name, startdate, enddate, interval)
 
-    # def glitchinate_smart(self):
-    #     final_glitch =  self.decide()
-    #     return final_glitch
 
     def tocsv(self,csvfilename):
-        import csv
+        import csv        
 
-        
-
+        # most tables not wind
         if self.table not in ['MS04314', 'MS00114', 'MS04334']:
             final_glitch = self.decide()
             web_csv = csv_that_glitch(final_glitch, csvfilename)
 
+        # wind
         elif self.table in ['MS04314', 'MS00114']:
             final_glitch1, final_glitch2, final_glitch3 = self.decide()
             web_csv = csv_that_windy_glitch(final_glitch1, final_glitch2, final_glitch3, csvfilename)
-            
+        
+        # sonic
         elif self.table == 'MS04334':
             final_glitch1, final_glitch2, final_glitch3, final_glitch4, final_glitch5= self.decide()
             web_csv = csv_that_sonic_glitch(final_glitch1, final_glitch2, final_glitch3, final_glitch4, final_glitch5, csvfilename)
 
         return web_csv
             
-
-
 # class PrettyBackground(object):
 
 #     """ generic class for plotting Glitchers against one another"""
