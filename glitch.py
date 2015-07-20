@@ -7,6 +7,15 @@ import itertools
 import sys
 import math
 
+def describe_me():
+  print """
+  glitch is the main engine behind our time series aggregation.
+  connect - makes connection to fsdb
+  drange - generates date ranges
+  glitchme - performs glitch aggregation when possible
+  createglitchedspeed - performs glitch aggregation on speed of wind
+  """
+
 def connect():
     ''' connect to the fsdbdata database'''
 
@@ -16,121 +25,6 @@ def connect():
     return conn, cursor
 
 
-def get_data(cursor, databaseid):
-  ''' from entity table, get the entity number and entity name based on the table name we are familiar with, such as MS043 '''
-
-  dbid_dict = {}
-
-  define_query = "select entity_id, entity_file_name from ltermeta.dbo.entity where entity_file_name like \'" + databaseid + "%\'"
-
-  cursor.execute(define_query)
-
-  for row in cursor:
-
-    if str(row[1]).rstrip() not in dbid_dict:
-      dbid_dict[str(row[1]).rstrip()] = str(row[0]).rstrip()
-    else:
-      pass
-
-  return dbid_dict
-
-def get_probes(cursor, dbid_dict):
-  ''' from the sub-entity table, get the name of the probes which are associated with that particular table'''
-
-  probe_dict = {}
-
-  for tableid in dbid_dict.keys():
-
-    define_query = "select entity_id, sub_entity_title from ltermeta.dbo.sub_entity where entity_id like \'" + dbid_dict[tableid] + "\'"
-
-    cursor.execute(define_query)
-
-    for row in cursor:
-
-      if tableid not in probe_dict:
-        probe_dict[tableid] = [str(row[1]).rstrip()]
-      elif tableid in probe_dict:
-        probe_dict[tableid].append(str(row[1]).rstrip())
-
-  return probe_dict
-
-
-def get_probetype(cursor, tableid):
-
-  define_query = "select column_name from fsdbdata.information_schema.columns where table_name like \'" + tableid + "\' and column_name like \'PROBE%\'"
-
-  cursor.execute(define_query)
-
-  for row in cursor:
-      probetype = str(row[0]).rstrip()
-
-  return probetype
-
-def get_many_probetypes(cursor, probe_dict):
-  """ if you want to get several probes """
-
-  probe_type_dict = {}
-
-  for each_key in probe_dict.keys():
-    pt = get_probetype(cursor, each_key)
-
-    if each_key not in probe_type_dict and pt != []:
-      probe_type_dict[each_key] = pt
-    else:
-      pass
-
-  return probe_type_dict
-
-def list_from_sublists(list_of_sublists):
-  """ generates a lists from a bunch of sublists"""
-  return list(itertools.chain.from_iterable(list_of_sublists))
-
-def get_attribute_names(cursor, tableid):
-
-  attr = []
-  flags = []
-
-  define_query = "select column_name from fsdbdata.information_schema.columns where table_name like \'" + tableid + "\' and column_name like \'%MEAN%\'"
-
-  cursor.execute(define_query)
-
-  for row in cursor:
-    if 'FLAG'.lower() not in str(row[0]).lower():
-      mean_name = str(row[0]).rstrip()
-      attr.append(mean_name)
-    
-    elif 'FLAG'.lower() in str(row[0]).lower():
-      flag_name = str(row[0]).rstrip()
-      flags.append(flag_name)
-    
-    else:
-      print("attribute has a strange name of: %s") %(str(row[0]).rstrip())
-
-  return attr, flags 
-
-def get_data_in_range(cursor, startdate, enddate, tableid, probetype, attr, flags, *args):
-
-  valid_data = {}
-
-  # temporary: get only the main "mean"
-  attr0 = attr[0]
-  flags0 = flags[0]
-
-  if args and args != []:
-    query = "select date_time, " + attr0 + ", " + flags0 + " from fsdbdata.dbo." + tableid + " where date_time >= \'" + startdate + "\' and  date_time < \'" + enddate + "\' and " + probetype + " like \'" + args[0] + "\'"
-
-    cursor.execute(query)
-
-    for row in cursor:
-      if datetime.datetime.strptime(str(row[0]), '%Y-%m-%d %H:%M:%S') not in valid_data:
-        valid_data[datetime.datetime.strptime(str(row[0]), '%Y-%m-%d %H:%M:%S')] = {'attr': str(row[1]), 'flag': str(row[2])}
-      elif datetime.datetime.strptime(str(row[0]), '%Y-%m-%d %H:%M:%S') in valid_data:
-        print("duplicate value at : %s") %(str(row[0]))
-  else:
-    pass
-
-  return valid_data
-
 def drange(start, stop, step):
   ''' returns a date range generator '''
   r = start
@@ -139,221 +33,163 @@ def drange(start, stop, step):
       r += step
 
 
-def glitchme(valid_data, interval):
+def glitchme(valid_data, interval, precip=False):
   ''' perform glitch aggregations LIKE A BOSS'''
-
-  # Get all dates where we have valid data to key from
-  dr = [x for x in sorted(valid_data.keys()) if valid_data[x] != 'None']
-
-  # Generate a range of one minute intervals from start to end of desired period
-  minrange = drange(dr[0], dr[-1], datetime.timedelta(minutes=1))
-
-  print valid_data
-  # Get all values which have valid data
-  val = [round(float(valid_data[x]['attr']),3) for x in sorted(valid_data.keys()) if valid_data[x]['attr'] != 'None' and valid_data[x]['attr'] != None]
-
-
-  # Get all flags associated with the valid data
-  fval = [valid_data[x]['flag'] for x in sorted(valid_data.keys()) if valid_data[x]['attr'] != 'None' and valid_data[x]['attr'] != None]
-
-  # Define an iterator to move across the measurements, even if they are not the same in time length
-  efficient_iterator = itertools.izip(dr[0:-1],dr[1:])
-
-  # Compute the difference between each measurement and convert to minutes.
-  tds = [(y-x).seconds/60 for (x,y) in efficient_iterator]
-
-  # Special kind of interpolation in Glitch: chain together the tuples of number of 1 minute intervals * value of each, then zip this up to the date range at one min resolution, i.e. 1.8 at 1 min, 1.8 at 2 min, 1.8 at 3 min, 2.0 at 4 min, 2.0 at 5 min, etc.
-  #one_minute_values = itertools.izip([p for p in minrange], list(itertools.chain.from_iterable([itertools.repeat(x,y) for (x,y) in itertools.izip(val[0:], tds)])))
-
-  one_minute_values = itertools.izip([p for p in minrange],
-  list(itertools.chain.from_iterable([itertools.repeat(x,y) for (x,y) in itertools.izip(val[0:], tds)])), list(itertools.chain.from_iterable([itertools.repeat(x,y) for (x,y) in itertools.izip(fval[0:], tds)])))
-
-  print one_minute_values
-  """Now we have a value for every one minute interval- start with start time + 1 interval (for example if 45 minutes starting at noon the first stop point is 12:45), end with end time plus one interval (for example, if stop point is 10 pm and interval takes you to 10:45 this is the stop point), but don't go up to it if we don't complete that final interval (generator yields only until iteration must stop)"""
-
-  # Generator for "stop points" for the new glitched interval i.e. every 35 minutes, etc.
-  output_drange = drange(dr[0] + datetime.timedelta(minutes=interval), dr[-1] + datetime.timedelta(minutes=interval), datetime.timedelta(minutes=interval))
-
-  # Each time the next method is called on the generator, we advance 1 stop point.
-  this_date = output_drange.next()
-
-  # for your sake, you can see the stop points (comment out if not helpful)
-  print "sought date is " + str(this_date)
 
   # holds the resulting data for each stop point, persists
   results = {}
-  results_flags = {}
-  # holds the values to go to the mean for each stop point, is cleared between points
-  t_mean = []
-  # hold the flags to go to the mean for each stop point, and is cleared between points
-  f_mean = []
 
-  """ if the current minute is less than the stop point, we add its value to the minute table and add increment the time by 1 minute """
-  for each_minute in one_minute_values:
+  # Get all dates where we have valid data to key from
+  dr = [x for x in sorted(valid_data.keys())]
 
-    # if current value is less than desired append
-    if each_minute[0] < this_date - datetime.timedelta(minutes=1):
-      t_mean.append(each_minute[1])
-      f_mean.append(each_minute[2])
+  first_date = dr[0] + datetime.timedelta(minutes=interval)
+  last_date = dr[-1] + datetime.timedelta(minutes=interval)
 
-    # if current value is same as desired, register for calculation
-    elif each_minute[0] == this_date-datetime.timedelta(minutes=1):
-      t_mean.append(each_minute[1])
-      results[this_date] = t_mean
-      f_mean.append(each_minute[2])
-      results_flags[this_date] = f_mean
+  # super_range is an ideal range from each interval to the next one (i.e. 15 minute intervals, 35 minute intervals, etc.)
+  super_range = drange(first_date, last_date, datetime.timedelta(minutes=interval))
 
-      # generate another measurement
-      try:
-        this_date = output_drange.next()
-        print "sought glitched date-time is " + str(this_date)
-        t_mean = []
-        f_mean = []
+  # min range is an ideal range for one minute intervals to aggregate
+  minrange = [x for x in drange(dr[0], dr[-1], datetime.timedelta(minutes=1))]
 
-        # if new measurement is bigger than the biggest 1 minute, return all values
-        if this_date > dr[-1]:
-          return results, results_flags
-
-      # if the iteration runs out before all one-minutes, stop 
-      except StopIteration:
-        print "Stop iteration caught, exiting the glitcher"
-        results[this_date] = t_mean
-        results_flags[this_date] = f_mean
-        return results, results_flags
-
-      # if a none-value exists, stop
-      except TypeError:
-        print "no more data left, exiting the glitcher"
-        results[this_date] = t_mean
-        results_flags[this_date] = f_mean
-        return results, results_flags
-
-    # if the one minutes are somehow larger than the iterator (don't think this is possible) stop
-    elif each_minute[0] > this_date:
-      print "output > date, unexpected behavior for iterator - see Fox to debug?"
-      return results, results_flags
-
-    # just in case, throw error to notice weird behavior here
-    else:
-      print "Something unexpected. Hum X files theme. Existential crisis."
-
-def create_glitched_speeds(results1, results2, results_flags):
-  """each speed is with its direction for the aggregate """
-  final_glitch = {}
-
-  for each_glitch in sorted(results1.keys()):
-    if results1[each_glitch] != []:
-
-      num_valid_obs = len(results1[each_glitch])
-
-      #import pdb;pdb.set_trace()
+  # t_mean stores values for that interval and f_mean stores flags for that interval
+  t_mean =[]
+  f_mean =[]
   
-      ypart = (sum([float(speed) * math.sin(math.radians(float(x))) for (speed, x) in itertools.izip(results1[each_glitch], results2[each_glitch]) if speed != 'None' and x != 'None'])/num_valid_obs)**2  
+  # make an iterator to walk the known date range (i.e. 10:00, 10:05, 10:10 etc.)
+  starting = iter(dr)
 
-      xpart = (sum([float(speed) * math.cos(math.radians(float(x))) for (speed, x) in itertools.izip(results1[each_glitch],results2[each_glitch]) if speed != 'None' and x != 'None'])/num_valid_obs)**2 
+  # ex. 2010-10-01 00:00:00
+  this_date = starting.next()
 
-      glitched_spd = math.sqrt(ypart + xpart)
+  # ex. 2010-10-01 00:05:00
+  subsequent = starting.next()
+
+  # first point to put in for the glitch (ex 2010-10-01 00:15:00)
+  checkpoint = super_range.next()
+
+  # the the attribute is precip or solar tot, we need to get a sum, so the one minute values are actually representative of 1/length of interval that quantity
+
+  if precip==True:
+    duration_1= (subsequent-this_date)
+    duration = duration_1.seconds/60 + duration_1.days*(86400/60)
+    
+  else:
+    duration = 1
+
+
+  for each_minute in minrange:
+    # if the minute is the checkpoint, update the dictionary to the accumulated values
+    # for example if it is 10-01-01 13:00:00 and that's a 13 min checkpoint, we get the values from 0-12 minutes in the dictionary for that checkpoint(so it is the previous minutes to that one)
+
+    if each_minute == checkpoint:
+
+      if checkpoint not in results:
+        results[checkpoint] = {'val': t_mean, 'fval': f_mean}
+
+      else:
+        print("Check point at " + datetime.datetime.strftime(each_minute, '%Y-%m-%d %H:%M:%S') + "is in the rsults already!")
+        import pdb; pdb.set_trace()
+
+      # set the storage to empty
+      t_mean = []
+      f_mean = []
+
+      # update the checkpoint by 1:
+      checkpoint = super_range.next()
+
+    else:
+      pass
+
+
+    # we still have to check if the value changes and start accumulating to the next date...
+    # this would get say between 10-01-01 00:00:00 and 10-01-01 00:00:04
+    if each_minute >= this_date and each_minute < subsequent:
 
       try:
-        num_flags = len(results_flags[each_glitch])
-        if ['E','M','Q'] not in results_flags[each_glitch]:
-          glitched_spd_flag = 'A'
+        t_mean.append(round(float(valid_data[this_date]['attr'])/duration,3))
+      except Exception:
+        #import pdb; pdb.set_trace()
+        print "none value found as " + str(valid_data[this_date]['attr']) + " on " + datetime.datetime.strftime(this_date, '%Y-%m-%d %H:%M:%S')
+        t_mean.append(valid_data[this_date]['attr'])
+
+      f_mean.append(valid_data[this_date]['flag'])
+
+    elif each_minute == subsequent:
+
+      # move up by one in the original search
+      this_date = subsequent
+      subsequent = starting.next()
+
+      # compute the number of minutes in the duration
+      if precip==True:
+        duration_1= (subsequent-this_date)
+        duration = duration_1.seconds/60 + duration_1.days*(86400/60)
         
-        else:
-          numM = len([x for x in results_flags[each_glitch] if x == 'M'])
-          numE = len([x for x in results_flags[each_glitch] if x == 'E'])
-          numQ = len([x for x in results_flags[each_glitch] if x == 'Q'])
-
-          if numM/num_flags > 0.8:
-            glitched_spd_flag = 'M'
-          elif numE/num_flags > 0.05:
-            glitched_spd_flag = 'E'
-          elif (numE + numM + numQ)/num_flags > 0.05:
-            glitched_spd_flag = 'Q'
-          else:
-            glitched_spd_flag = 'A'
-      
-      except Exception:
-          glitched_spd_flag = 'M'
-
-    elif results1[each_glitch] == [] or results2[each_glitch] == []:
-      glitched_spd = None
-      glitched_spd_flag = 'M'
-
-      # throw b or n flag if speed or mag is less than detection limits
-                    
-    if glitched_spd < 1.0 and glitched_spd > 0.3:
-        glitched_spd_flag = "B"
-    elif glitched_spd <= 0.3:
-        glitched_spd_flag = "N"
-    else:
-        pass
-      
-    final_glitch[each_glitch] = {'mean': round(glitched_spd,2), 'flags': glitched_spd_flag}
-
-  return final_glitch
-
-def create_glitched_dirs(results1, results2, results_flags):
-  """ using speed and dir for dir"""
-  final_glitch = {}
-
-  for each_glitch in sorted(results1.keys()):
-    if results1[each_glitch] != []:
-
-      num_valid_obs = len(results1[each_glitch])
-
-      # computes the wind direction
-      theta_u = math.atan2(sum([float(speed) * math.sin(math.radians(float(x))) for (speed, x) in itertools.izip(results1[each_glitch], results2[each_glitch]) if speed != 'None' and x != 'None'])/num_valid_obs, sum([float(speed) * math.cos(math.radians(float(x))) for (speed, x) in itertools.izip(results1[each_glitch],results2[each_glitch]) if speed != 'None' and x != 'None'])/num_valid_obs)
-  
-      glitched_dir = round(math.degrees(theta_u),3)
+      else:
+        duration = 1
 
       try:
-        num_flags = len(results_flags[each_glitch])
-        if ['E','M','Q'] not in results_flags[each_glitch]:
-          flagged_val = 'A'
-        else:
-          numM = len([x for x in results_flags[each_glitch] if x == 'M'])
-          numE = len([x for x in results_flags[each_glitch] if x == 'E'])
-          numQ = len([x for x in results_flags[each_glitch] if x == 'Q'])
-
-          if numM/num_flags > 0.8:
-            flagged_val = 'M'
-          elif numE/num_flags > 0.05:
-            flagged_val = 'E'
-          elif (numE + numM + numQ)/num_flags > 0.05:
-            flagged_val = 'Q'
-          else:
-            flagged_val = 'A'
-      
+        t_mean.append(round(float(valid_data[this_date]['attr'])/duration,3))
       except Exception:
-          flagged_val = 'M'
+        t_mean.append(valid_data[this_date]['attr'])
 
-    elif results1[each_glitch] == [] or results2[each_glitch] == []:
-      meanval = None
-      flagged_val = 'M'
+      f_mean.append(valid_data[this_date]['flag'])
 
-    final_glitch[each_glitch] = {'mean': round(glitched_dir,2), 'flags': flagged_val}
+    elif each_minute >= subsequent:
+      print "the minute should not exceed the subsequent"
 
-  return final_glitch
+  return results
 
-def create_glitched_output(results, results_flags):
-  """hum rocky theme joyfully do -dee do do"""
+def create_glitch(results, precip=False):
+  """
+  Applies to all criteria EXCEPT Wind Magnitude, Wind Direction, and some of the sonic things
+  If the attribute is wind speed, an additional flag is needed, copy from wind mag, where it is implemented
+  """
+  # output structure
   final_glitch = {}
-
   for each_glitch in sorted(results.keys()):
-
+    
     if results[each_glitch] != []:
 
-      meanval = round( sum(results[each_glitch])/len(results[each_glitch]),2)
+      # if the data is precip (or solar total), the results are a sum of the intermediate values, after you have divided by the duration of the interval. If Nones exist it won't add so you will need to instead do the sum of the intermediate values which are not None.
+      if precip==True:
+
+        try:
+          meanval = round(sum(results[each_glitch]['val']),2)
+        except Exception:
+          values = [results[each_glitch]['val'][index] for index,x in enumerate(results[each_glitch]['val']) if x != None and x != "None"]
+
+          if values == []:
+            meanval = "None"
+          
+          else:
+            meanval = round(sum(values),2)
+      
+      # in the generic case the mean is the sum of the results divided by the total number of values contributing to it. But if there are nones, we will need to only divide by the number of relevant values
+      else:
+        try: 
+          meanval = round(sum(results[each_glitch]['val'])/len(results[each_glitch]['val']),2)
+        except Exception:
+          values = [results[each_glitch]['val'][index] for index,x in enumerate(results[each_glitch]['val']) if x != None and x != "None"]
+
+          if values == []:
+            print "The entire interval contains only bad values: " + datetime.datetime.strftime(each_glitch,'%Y-%m-%d %H:%M:%S')
+            meanval = "None"
+          
+          else:
+            meanval = round(sum(values)/len(values),2)
 
       try:
-        num_flags = len(results_flags[each_glitch])
-        if ['E','M','Q'] not in results_flags[each_glitch]:
+        
+        num_flags = len(results[each_glitch]['fval'])
+
+        if 'E' not in results[each_glitch]['fval'] and 'M' not in results[each_glitch]['fval'] and 'Q' not in results[each_glitch]['fval']:
           flagged_val = 'A'
+        
         else:
-          numM = len([x for x in results_flags[each_glitch] if x == 'M'])
-          numE = len([x for x in results_flags[each_glitch] if x == 'E'])
-          numQ = len([x for x in results_flags[each_glitch] if x == 'Q'])
+          numM = len([x for x in results[each_glitch]['fval'] if x == 'M'])
+          numE = len([x for x in results[each_glitch]['fval'] if x == 'E'])
+          numQ = len([x for x in results[each_glitch]['fval'] if x == 'Q'])
 
           if numM/num_flags > 0.8:
             flagged_val = 'M'
@@ -365,13 +201,139 @@ def create_glitched_output(results, results_flags):
             flagged_val = 'A'
       
       except Exception:
-          flagged_val = 'M'
+        flagged_val = 'M'
 
-    elif results[each_glitch] == []:
+    elif results[each_glitch]['fval'] == []:
       meanval = None
       flagged_val = 'M'
 
     final_glitch[each_glitch] = {'mean': meanval, 'flags': flagged_val}
+
+  return final_glitch
+
+def create_glitched_mags(results1, results2):
+  """
+  from the speed we get the x and y components for each direction for the magnitude
+  then we add these up over the course of the glitch and take the sqrt
+  """
+  final_glitch = {}
+
+  for each_glitch in sorted(results1.keys()):
+    if results1[each_glitch]['val'] != []:
+
+      num_valid_obs = len(results1[each_glitch]['val'])
+  
+      try:
+        # find all the y parts and add them up, find all the x parts and add them up, take the square root
+        ypart = (sum([float(speed) * math.sin(math.radians(float(x))) for (speed, x) in itertools.izip(results1[each_glitch]['val'], results2[each_glitch]['val'])])/num_valid_obs)**2 
+        
+        xpart = (sum([float(speed) * math.cos(math.radians(float(x))) for (speed, x) in itertools.izip(results1[each_glitch]['val'],results2[each_glitch]['val'])])/num_valid_obs)**2 
+        
+        glitched_mag = math.sqrt(ypart + xpart)
+      
+      except Exception:
+
+        # when some of the values are none, only do the values we need
+        num_valid_obs = len([x for x in results1[each_glitch]['val'] if x != None and x != 'None'])
+
+        ypart = (sum([float(speed) * math.sin(math.radians(float(x))) for (speed, x) in itertools.izip(results1[each_glitch]['val'], results2[each_glitch]['val']) if speed != 'None' and x != 'None'])/num_valid_obs)**2  
+        xpart = (sum([float(speed) * math.cos(math.radians(float(x))) for (speed, x) in itertools.izip(results1[each_glitch]['val'],results2[each_glitch]['val']) if speed != 'None' and x != 'None'])/num_valid_obs)**2 
+        
+        glitched_mag = math.sqrt(ypart + xpart)
+
+      try:
+        num_flags = len(results_flags[each_glitch]['fval'])
+        
+        if 'E' not in results[each_glitch]['fval'] and 'M' not in results[each_glitch]['fval'] and 'Q' not in results[each_glitch]['fval']:
+
+          glitched_spd_flag = 'A'
+        
+        else:
+          numM = len([x for x in results_flags[each_glitch]['fval'] if x == 'M'])
+          numE = len([x for x in results_flags[each_glitch]['fval'] if x == 'E'])
+          numQ = len([x for x in results_flags[each_glitch]['fval'] if x == 'Q'])
+
+          if numM/num_flags > 0.8:
+            glitched_mag_flag = 'M'
+          elif numE/num_flags > 0.05:
+            glitched_mag_flag = 'E'
+          elif (numE + numM + numQ)/num_flags > 0.05:
+            glitched_mag_flag = 'Q'
+          else:
+            glitched_mag_flag = 'A'
+      
+      except Exception:
+          glitched_mag_flag = 'M'
+
+    elif results1[each_glitch]['val'] == [] or results2[each_glitch]['val'] == []:
+      glitched_mag = None
+      glitched_mag_flag = 'M'
+
+      # throw b or n flag if speed or mag is less than detection limits
+                    
+    if glitched_mag < 1.0 and glitched_mag > 0.3:
+        glitched_mag_flag = "B"
+    elif glitched_mag <= 0.3:
+        glitched_mag_flag = "N"
+    else:
+        pass
+      
+    final_glitch[each_glitch] = {'mean': round(glitched_mag,2), 'flags': glitched_mag_flag}
+
+  return final_glitch
+
+def create_glitched_dirs(results1, results2):
+  """ Campbell uses the yamartino method, which is a weighted direction based on speed"""
+  final_glitch = {}
+
+  for each_glitch in sorted(results1.keys()):
+    if results1[each_glitch]['val'] != []:
+
+      num_valid_obs = len(results1[each_glitch]['val'])
+
+      # computes the wind direction
+      try:
+
+        theta_u = math.atan2(sum([float(speed) * math.sin(math.radians(float(x))) for (speed, x) in itertools.izip(results1[each_glitch]['val'], results2[each_glitch]['val'])])/num_valid_obs, sum([float(speed) * math.cos(math.radians(float(x))) for (speed, x) in itertools.izip(results1[each_glitch]['val'],results2[each_glitch]['val'])])/num_valid_obs)
+
+        glitched_dir = round(math.degrees(theta_u),3)
+
+      except Exception: 
+
+        # when some of the values are none, only do the values we need
+        num_valid_obs = len([x for x in results1[each_glitch]['val'] if x != None and x != 'None'])
+
+        # computes the wind direction
+        theta_u = math.atan2(sum([float(speed) * math.sin(math.radians(float(x))) for (speed, x) in itertools.izip(results1[each_glitch]['val'], results2[each_glitch]['val']) if speed != 'None' and x != 'None'])/num_valid_obs, sum([float(speed) * math.cos(math.radians(float(x))) for (speed, x) in itertools.izip(results1[each_glitch]['val'],results2[each_glitch]['val']) if speed != 'None' and x != 'None'])/num_valid_obs)
+
+        glitched_dir = round(math.degrees(theta_u),3)
+
+      try:
+        num_flags = len(results_flags[each_glitch]['fval'])
+        if 'E' not in results_flags[each_glitch]['fval'] and 'M' not in results_flags[each_glitch]['fval'] and 'Q' not in results_flags[each_glitch]['fval']:
+          flagged_val = 'A'
+        else:
+          numM = len([x for x in results_flags[each_glitch]['fval'] if x == 'M'])
+          numE = len([x for x in results_flags[each_glitch]['fval'] if x == 'E'])
+          numQ = len([x for x in results_flags[each_glitch]['fval'] if x == 'Q'])
+
+          if numM/num_flags > 0.8:
+            flagged_val = 'M'
+          elif numE/num_flags > 0.05:
+            flagged_val = 'E'
+          elif (numE + numM + numQ)/num_flags > 0.05:
+            flagged_val = 'Q'
+          else:
+            flagged_val = 'A'
+    
+      except Exception:
+          flagged_val = 'M'
+
+    elif results1[each_glitch]['val'] == [] or results2[each_glitch]['val'] == []:
+      meanval = None
+      flagged_val = 'M'
+
+    final_glitch[each_glitch] = {'mean': round(glitched_dir,2), 'flags': flagged_val}
 
   return final_glitch
 
@@ -380,18 +342,20 @@ def create_glitched_output(results, results_flags):
 def csv_that_glitch(final_glitch, csvfilename = "sample_glitch_csv.csv"):
   """ create a csv for the glitch. pass 1 parameter of csvfilename = <blah> if you want to name it"""
   csv_list = []
-  print final_glitch
 
   with open(csvfilename, 'wb') as writefile:
     writer = csv.writer(writefile)
 
+    # raw dates is type date time and dates is string type; we need the raw type to search the dictionary and the string type to write the output
     raw_dates = [x for x in sorted(final_glitch.keys())]
     dates = [datetime.datetime.strftime(x,'%Y-%m-%d %H:%M:%S') for x in sorted(final_glitch.keys())]
+    
     try:
       vals= [final_glitch[x]['mean'] for x in dates]
     except Exception:
       vals = [final_glitch[x]['mean'] for x in raw_dates]
-    try:
+    t
+    ry:
       flags = [final_glitch[x]['flags'] for x in dates]
     except Exception:
       flags = [final_glitch[x]['flags'] for x in raw_dates]
@@ -403,11 +367,11 @@ def csv_that_glitch(final_glitch, csvfilename = "sample_glitch_csv.csv"):
       writer.writerow([each_date, vals[index], flags[index]])
       csv_list.append("<br>" + each_date + "," + str(vals[index]) +", " + flags[index] +"</br>")
 
-  print("Glitched csv -- completed!")
-  return csv_list
+  print("Glitched csv -- standard formatting -- completed!")
+  return csv_list 
 
 def csv_that_windy_glitch(final_glitch1, final_glitch2, final_glitch3, csvfilename="sample_windy_glitch_csv.csv"):
-  """ when glitcher gets a windy glitch this method will handle it """
+  """ with the wind we give it first speed (final glitch1) , then direction (final glitch2), then magnitude (final glitch3) """
   
   #import pdb; pdb.set_trace()
   csv_list = []
@@ -418,16 +382,16 @@ def csv_that_windy_glitch(final_glitch1, final_glitch2, final_glitch3, csvfilena
     raw_dates = [x for x in sorted(final_glitch1.keys())]
     dates = [datetime.datetime.strftime(x,'%Y-%m-%d %H:%M:%S') for x in sorted(final_glitch1.keys())]
 
-    print final_glitch1
     try:
       vals_spd= [final_glitch1[x]['mean'] for x in dates]
     except Exception:
       vals_spd= [final_glitch1[x]['mean'] for x in raw_dates]
 
+    # speed actually needs to take the flags from magnitude because these contain the N and B values
     try:
-      flags_spd = [final_glitch1[x]['flags'] for x in dates]
+      flags_spd = [final_glitch3[x]['flags'] for x in dates]
     except Exception:
-      flags_spd = [final_glitch1[x]['flags'] for x in raw_dates]
+      flags_spd = [final_glitch3[x]['flags'] for x in raw_dates]
 
     try:
       vals_dir= [final_glitch2[x]['mean'] for x in dates]
@@ -534,6 +498,56 @@ def csv_that_sonic_glitch(final_glitch1, final_glitch2, final_glitch3, final_gli
     print("Sonic Glitch csv -- completed!")
     return csv_list
 
+def csv_that_solar_glitch(final_glitch1, final_glitch2):
+
+  """ solar glitch first takes a mean and then a tot -- the difference is that precip is true on the second and false on the first, so that the total method is used"""
+  
+  #import pdb; pdb.set_trace()
+  csv_list = []
+  with open(csvfilename, 'wb') as writefile:
+    writer = csv.writer(writefile)
+
+    raw_dates = [x for x in sorted(final_glitch1.keys())]
+    dates = [datetime.datetime.strftime(x,'%Y-%m-%d %H:%M:%S') for x in sorted(final_glitch1.keys())]
+
+    # solar mean
+    try:
+      vals_mean= [final_glitch1[x]['mean'] for x in dates]
+    except Exception:
+      vals_mean= [final_glitch1[x]['mean'] for x in raw_dates]
+
+    
+    try:
+      flags_mean = [final_glitch1[x]['flags'] for x in dates]
+    except Exception:
+      flags_mean = [final_glitch1[x]['flags'] for x in raw_dates]
+
+    # solar tot
+    try:
+      vals_tot= [final_glitch2[x]['mean'] for x in dates]
+    except Exception:
+      vals_tot= [final_glitch2[x]['mean'] for x in raw_dates]
+
+    try:
+      flags_tot = [final_glitch2[x]['flags'] for x in dates]
+    except Exception:
+      flags_tot = [final_glitch2[x]['flags'] for x in raw_dates]
+
+    writer.writerow(['DATE','GLITCHED_RAD_MEAN','GLITCHED_RAD_MEAN_FLAG','GLITCHED_RAD_TOT','GLITCHED_RAD_TOT_FLAG','GLITCHED_MAG_MEAN','GLITCHED_MAG_FLAG'])
+    csv_list.append("<br> DATE, GLITCHED_RAD_MEAN, GLITCHED_RAD_MEAN_FLAG, GLITCHED_RAD_TOT, GLITCHED_RAD_TOT_FLAG </br>")
+
+    for index, each_date in enumerate(dates):
+      print index
+      print each_date
+      writer.writerow([each_date, vals_mean[index], flags_mean[index], vals_tot[index], flags_tot[index]])
+
+      csv_list.append("<br>" + each_date + ", " + str(vals_mean[index]) +", " + str(flags_mean[index]) + ", " + str(vals_tot[index]) + ", " + str(flags_tot[index]) +"</br>")
+
+    print csv_list
+  print("Solar csv -- completed!")
+  return csv_list
+
+
 def html_that_glitch(final_glitch):
   """ makes some lists"""
 
@@ -559,50 +573,3 @@ def html_that_glitch(final_glitch):
       htmlfile.write(nr)
     htmlfile.write("</body></html>")
     htmlfile.close()
-
-if __name__ == "__main__":
-
-  # test with MS043, MS04311 - can loop over keys later
-
-  dbcode_id = sys.argv[1]
-
-  if sys.argv[2] and sys.argv[2] != []:
-    table_id = sys.argv[2]
-  else:
-    table_id = 'MS04311'
-
-  glitch_minutes = int(sys.argv[3])
-
-  cx, cur = connect()
-
-  # give the dbcode id to the lookup- first parameter to input, has been tested on HT004, MS001, MS043, TP001
-  dbx_dict = get_data(cur, dbcode_id)
-
-  # get the probes, what the "type" of their name is, and the attributes within
-  prx_dict = get_probes(cur, dbx_dict)
-
-  # get the type of the probe that it is
-  probex = get_probetype(cur, table_id)
-
-  # get all attributes and flags that are means
-  attrx, flagx = get_attribute_names(cur, table_id)
-
-  # pass a probe_name for testing
-  probe_name = 'AIRVAN01'
-
-  # pass a start_date and end_date for testing
-
-  start_date = '2010-04-10 00:00:00'
-  end_date = '2010-04-10 03:00:00'
-
-  # get the data -- works to this point
-  vd = get_data_in_range(cur, start_date, end_date, table_id, probex, attrx, flagx, probe_name)
-
-  # now to aggregate
-  glitched_dict, glitched_flags = glitchme(vd, glitch_minutes)
-
-  finalz = create_glitched_output(glitched_dict, glitched_flags)
-  html_that_glitch(finalz)
-  csv_that_glitch(finalz)
-
-  print finalz

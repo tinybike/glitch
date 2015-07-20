@@ -7,6 +7,17 @@ import sys
 import yaml
 import json
 
+
+def describe_me():
+    print """
+    map_glitch.py generates yaml and json configuration files to find all instances 
+    of variables named probe or something derived from probe that can be 'glitched'.
+    the yaml and json files are used to look up the correct start and end dates and probe
+    names in the glitch processing programs
+
+    you can run map_glitch.py whenever without really giving any arguments.
+    """
+
 def connect():
     ''' connect to the fsdbdata database'''
 
@@ -89,7 +100,7 @@ def all_get_references(cursor, od):
                 
                 # which is probe/probe_type, mean/meanflag
                 probe_word = [x for x in lon if 'PROBE' in x][0]
-                mean_words = [x for x in lon if 'MEAN' in x]
+                mean_words = [x for x in lon if 'MEAN' in x or 'TOT' in x]
                 method_words =[x for x in lon if 'METHOD' in x]
                 
                 if len(mean_words) >= 1:
@@ -115,7 +126,8 @@ def all_get_references(cursor, od):
                     continue 
 
             else:
-                print "It is only daily for the " + my_attribute
+                print "We only have data that is daily for : " + my_attribute
+
 
         write_schema_to_yaml(each_schema, schema_d)
         write_schema_to_json(each_schema, schema_d)
@@ -134,11 +146,13 @@ def get_attribute_id_for_probe(cursor, my_entity_id):
             list_attributes.append(str(row[0]))
         except Exception:
             import pdb; pdb.set_trace()
+    
     return tuple(list_attributes)
 
 
 def epic_query(cursor, my_attribute, probe_word, date_word):
     """ generates distinct start and ending dates for each probe on each attribute if it is hr probe"""
+    
     starts_by_probe = {}
     ends_by_probe = {}
 
@@ -162,17 +176,19 @@ def epic_query(cursor, my_attribute, probe_word, date_word):
     return starts_by_probe, ends_by_probe
 
 def write_schema_to_yaml(this_schema, schema_dict):
+    """ writes a yaml file containing the schema"""
 
     with open(this_schema + '.yml', 'w') as outfile:
         outfile.write( yaml.dump(schema_dict, default_flow_style=True) )
 
-    print "I have dumped the output to a yaml"
+    print "Successfully dumped the output to a yaml file"
 
 def write_schema_to_json(this_schema, schema_dict):
-
+    """ writes a json file containing the schema"""
     with open(this_schema + '.json', 'w') as outfile:
         json.dump(schema_dict, outfile)
 
+    print "Successfully dumped the output to a json file"
 
 def get_attribute_names_for_probe_and_site(cursor, list_attributes):
     """ get the probe code name and mean things name from attribute table"""
@@ -196,6 +212,12 @@ def get_attribute_names_for_probe_and_site(cursor, list_attributes):
             print "associating %s with %s" %(str(row[0]).rstrip(),list_attributes[index])
 
         if "MEAN" in str(row[0]).rstrip():
+            #attributes_we_want_to_glitch.append(int(list_attributes[index]))
+            attributes_we_want_to_glitch.append(str(row[0]).rstrip())
+            print "associating %s with %s" %(str(row[0]).rstrip(),list_attributes[index])
+
+        # added "tot" method for precip and solar
+        if "TOT" in str(row[0]).rstrip():
             #attributes_we_want_to_glitch.append(int(list_attributes[index]))
             attributes_we_want_to_glitch.append(str(row[0]).rstrip())
             print "associating %s with %s" %(str(row[0]).rstrip(),list_attributes[index])
