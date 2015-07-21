@@ -10,9 +10,10 @@ import numpy as np
 from glitch import glitchme as glitchme
 from glitch import create_glitch as finalize
 from glitch import create_glitched_dirs
-from glitch import create_glitched_speeds
+from glitch import create_glitched_mags
 from glitch import csv_that_glitch
 from glitch import csv_that_sonic_glitch
+from glitch import csv_that_solar_glitch
 from glitch import csv_that_windy_glitch
 import math
 import re
@@ -34,7 +35,14 @@ def connect():
 
 class Glitcher(object):
 
-    """ generic class for all the glitched things. u is the yaml file that is open """
+    """ generic class for all the glitched things. 
+    u is the yaml file that is open 
+    table is teh full name of the table, such as ms04315
+    name is the probe name, which must be obtained or set
+    end date is the last dt to glitch to which must be obtained or set
+    start date is the first dt to glitch from, which must be obtained or set
+    interval is the number of minutes over which we glitch
+    """
 
     def __init__(self, table, name, startdate, enddate, interval):
         self.table = table
@@ -56,8 +64,11 @@ class Glitcher(object):
         """ special cases on wind, nr, solar, snc """
 
         if self.table in ['MS04314', 'MS00114']:
+            # speed
             valid_data = {}
+            # magnitude
             valid_data2 = {}
+            # direction
             valid_data3 = {}
 
             val_dir_word = [x for x in self.u[self.table]['mean_words'] if 'FLAG' not in x and 'DIR' in x][0]
@@ -138,15 +149,20 @@ class Glitcher(object):
                 elif dt in valid_data2:
                     print("duplicate value at : %s") %(str(row[0]))
             
-
+            # mean, tot
             return valid_data, valid_data2
 
 
         elif self.table in ['MS04334', 'MS00134']:
+            # speed
             valid_data = {}
+            # ux
             valid_data2 = {}
+            # uy
             valid_data3 = {}
+            # dir
             valid_data4 = {}
+            # airt
             valid_data5 = {}
 
             # special cases on snc
@@ -161,33 +177,34 @@ class Glitcher(object):
             flag_air_word = [x for x in self.u[self.table]['mean_words'] if 'FLAG' in x and 'AIR' in x][0]
             val_air_word = [x for x in self.u[self.table]['mean_words'] if 'FLAG' not in x and 'AIR' in x][0]
 
-            query = "select " + u[self.table]['date_word'] +", " + val_spd_word + ", " + flag_spd_word + ", " + val_ux_word + ", " + flag_ux_word + ", " + val_uy_word + ", " + flag_uy_word + "," + val_dir_word + ", " + flag_dir_word + ", " + val_air_word + ", " + flag_air_word +" from fsdbdata.dbo." + self.table + " where " + u[self.table]['date_word'] + " >= \'" + self.startdate + "\' and " + u[self.table]['date_word'] + " < \'" + self.enddate + "\' and " + u[self.table]['probe_word'] + " like \'" + self.name + "\'"
+            query = "select " + self.u[self.table]['date_word'] +", " + val_spd_word + ", " + flag_spd_word + ", " + val_ux_word + ", " + flag_ux_word + ", " + val_uy_word + ", " + flag_uy_word + "," + val_dir_word + ", " + flag_dir_word + ", " + val_air_word + ", " + flag_air_word +" from fsdbdata.dbo." + self.table + " where " + self.u[self.table]['date_word'] + " >= \'" + self.startdate + "\' and " + self.u[self.table]['date_word'] + " < \'" + self.enddate + "\' and " + self.u[self.table]['probe_word'] + " like \'" + self.name + "\'"
 
             self.cursor.execute(query)
 
             for row in self.cursor:
+                print row
 
                 dt = datetime.datetime.strptime(str(row[0]), '%Y-%m-%d %H:%M:%S')
 
-                # ux
+                # spd
                 if dt not in valid_data:
                     valid_data[dt] = {'attr': str(row[1]), 'flag': str(row[2])}
                 elif dt in valid_data:
                     print("duplicate value at : %s") %(str(row[0]))
                 
-                # spd
+                # ux
                 if dt not in valid_data2:
                     valid_data2[dt] = {'attr': str(row[3]), 'flag': str(row[4])}
                 elif dt in valid_data2:
                     print("duplicate value at : %s") %(str(row[0]))
 
-                # dir
+                # uy
                 if dt not in valid_data3: 
                     valid_data3[dt] = {'attr': str(row[5]), 'flag': str(row[6])}
                 elif dt in valid_data3:
                     print("duplicate value at : %s") %(str(row[0]))
 
-                # uy
+                # dir
                 if dt not in valid_data4: 
                     valid_data4[dt] = {'attr': str(row[7]), 'flag': str(row[8])}
                 elif dt in valid_data4:
@@ -202,6 +219,7 @@ class Glitcher(object):
                 else:
                     pass
 
+            # spd, ux, uy, dir, air
             return valid_data, valid_data2, valid_data3, valid_data4, valid_data5
 
         elif self.table in ['MS04335', 'MS00135']:
@@ -231,24 +249,27 @@ class Glitcher(object):
             valid_data = {}
             
             # flags and values
-            if self.table[0:5] != 'MS001' and self.table[0:5] != 'HT004':
-                print "REL CEN IS NOT AN UNACCEPTABLE TABLE"
+            if self.table not in ['HT00411','MS00511','HT00434','MS00512','MS00531']:
+                
+                print "KEY WORD is listed; TABLE IS NOT a weird one in HT004 or MS005"
+                
                 val_word = [x for x in self.u[self.table]['mean_words'] if 'FLAG' not in x][0]
                 flag_word = [x for x in self.u[self.table]['mean_words'] if 'FLAG' in x][0]
             
-            elif self.table[0:5] == 'MS001':
-                lookup = {'MS00111': 'FT1',
-                            'MS00112': 'FR1',
-                            'MS00113': 'FP1',
-                            'MS00115': 'FS1',
-                            'MS00116': 'FM1',
-                            'MS00117': 'FD1',
-                            'MS00118': 'FV1',
-                            'MS00119': 'FL1',
-                            'MS00131': 'FST1',
-                            'MS00132': 'FPR1'}
+            # elif self.table[0:5] == 'MS001':
+            #     # flags in MS001 have very different names
+            #     lookup = {'MS00111': 'FT1',
+            #                 'MS00112': 'FR1',
+            #                 'MS00113': 'FP1',
+            #                 'MS00115': 'FS1',
+            #                 'MS00116': 'FM1',
+            #                 'MS00117': 'FD1',
+            #                 'MS00118': 'FV1',
+            #                 'MS00119': 'FL1',
+            #                 'MS00131': 'FST1',
+            #                 'MS00132': 'FPR1'}
                 
-                flag_word = lookup[self.table]
+            #     flag_word = lookup[self.table]
             
             # the HT series
             elif self.table in ['HT00411', 'MS00511']:
@@ -261,8 +282,6 @@ class Glitcher(object):
                 flag_word = 'FST1'
             else:
                 pass
-
-            print val_word
 
             query = "select " + self.u[self.table]['date_word'] + ", " + val_word + ", " + flag_word + " from fsdbdata.dbo." + self.table + " where " + self.u[self.table]['date_word'] + " >= \'" + self.startdate + "\' and " + self.u[self.table]['date_word'] + " < \'" + self.enddate + "\' and " + self.u[self.table]['probe_word'] + " like \'" + self.name + "\'"
 
@@ -281,27 +300,29 @@ class Glitcher(object):
             return valid_data
 
     def glitchinate(self, my_valid_data):
-        """ compute the glitches except wind-- even solar glitch is ok"""
+        """ compute the glitches except wind and solar and sonic"""
 
         if self.table not in ['MS00113','MS04313']:
             results = glitchme(my_valid_data, self.interval, precip=False)
-
+            final_glitch = finalize(results)
         else:
             # if precip is true then the "TOT" record will also be used
             results = glitchme(my_valid_data, self.interval, precip=True)
+            final_glitch = finalize(results, precip=True)
 
-        final_glitch = finalize(results)
+        # mean or tot
         return final_glitch
 
     def glitchinate_sol(self, my_valid_data, my_valid_data2):
         """ compute the glitches except wind-- even solar glitch is ok"""
 
         results = glitchme(my_valid_data, self.interval, precip=False)
-
         results2 = glitchme(my_valid_data2, self.interval, precip=True)
 
         final_glitch1 = finalize(results)
-        final_glitch2 = finalize(results2)
+        final_glitch2 = finalize(results2, precip=True)
+
+        # mean, tot
         return final_glitch1, final_glitch2
 
     def glitchinate_wind(self, my_valid_data_spd, my_valid_data_dir, my_valid_data_mag):
@@ -313,13 +334,14 @@ class Glitcher(object):
         # mag
         results_mag= glitchme(my_valid_data_mag, self.interval)
 
-        final_glitch_spd = create_glitched_speeds(results_spd, results_dir)
+        final_glitch_mag = create_glitched_mags(results_spd, results_dir)
         final_glitch_dir = create_glitched_dirs(results_spd, results_dir)
-        final_glitch_mag = finalize(results_mag)
+        final_glitch_spd = finalize(results_spd)
 
         return final_glitch_spd, final_glitch_dir, final_glitch_mag
 
-    def glitchinate_sonic(self, my_valid_data_ux, my_valid_data_spd, my_valid_data_dir, my_valid_data_uy, my_valid_data_air):
+    def glitchinate_sonic(self, my_valid_data_spd, my_valid_data_ux, my_valid_data_uy, my_valid_data_dir, my_valid_data_air):
+        
         # speed
         results_spd= glitchme(my_valid_data_spd, self.interval)
         # dir
@@ -331,7 +353,7 @@ class Glitcher(object):
         # air
         results_air= glitchme(my_valid_data_air, self.interval)
 
-        final_glitch_spd = create_glitched_speeds(results_spd, results_dir)
+        final_glitch_spd = finalize(results_spd, results_dir)
         final_glitch_dir = create_glitched_dirs(results_spd, results_dir)
         final_glitch_ux = finalize(results_ux)
         final_glitch_uy = finalize(results_uy)
@@ -344,10 +366,12 @@ class Glitcher(object):
 
         if self.table in ['MS04314', 'MS00114']:
             
-            # u1 = self.get_yaml()
+            # speed, magnitude, direction are the inputs vd1, vd2, vd3
             try:
                 vd1, vd2, vd3 = self.get_data_in_range()
-                fg1, fg2, fg3 = self.glitchinate_wind(vd1, vd2, vd3)
+                # speed, direction, magnitude are the inputs to glitchinate wind, fg1, fg2, fg3 are the outputs
+                # of speed, direction, magnitude
+                fg1, fg2, fg3 = self.glitchinate_wind(vd1, vd3, vd2)
 
             except IndexError:
                 return "<html><body><b> Error: data not found in range </b></body></html>"
@@ -357,20 +381,23 @@ class Glitcher(object):
 
         elif self.table in ['MS04334']:
             
-            # u1 = self.get_yaml()
+            # speed, ux, uy, dir, air are vd1, vd2, vd3, vd4, vd5
             try:
                 vd1, vd2, vd3, vd4, vd5 = self.get_data_in_range()
+                # speed, dir, ux, uy, air are fg1, fg2, fg3, fg4, fg5, glitchinate takes speed, ux, uy, dir, air
                 fg1, fg2, fg3, fg4, fg5 = self.glitchinate_sonic(vd1, vd2, vd3, vd4, vd5)
             except IndexError:
                 return "<html><body><b> Error: data not found in range </b></body></html>"
                 fg1 = [], fg2 = [], fg3= [], fg4 = [], fg5 = []
+            
             return fg1, fg2, fg3, fg4, fg5
         
         elif self.table in ['MS04315', 'MS00115']:
 
             try:
-
+                # mean, tot are vd1, vd2
                 vd1, vd2 = self.get_data_in_range()
+                # mean and total 
                 fg1, fg2 = self.glitchinate_sol(vd1, vd2)
 
             except IndexError:
@@ -404,7 +431,7 @@ class SmartGlitcher(Glitcher):
         import csv        
 
         # most tables not wind
-        if self.table not in ['MS04314', 'MS00114', 'MS04334']:
+        if self.table not in ['MS04314', 'MS00114', 'MS04334','MS04315','MS00115']:
             final_glitch = self.decide()
             web_csv = csv_that_glitch(final_glitch, csvfilename)
 
@@ -419,6 +446,7 @@ class SmartGlitcher(Glitcher):
             web_csv = csv_that_sonic_glitch(final_glitch1, final_glitch2, final_glitch3, final_glitch4, final_glitch5, csvfilename)
 
         elif self.table in ['MS04315','MS00115']:
-            final_glitch1, final_glitch2 = 
+            final_glitch1, final_glitch2 = self.decide()
+            web_csv = csv_that_solar_glitch(final_glitch1, final_glitch2, csvfilename)
 
         return web_csv

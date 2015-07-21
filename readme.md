@@ -1,29 +1,23 @@
-READ ME -- NewGlitch
+READ ME -- Glitch.py
 =========
 
-Version: 0.0.6
+Version: 0.1.0
 
-NewGlitch is a Python implementation of the original GLITCH program implemented in Perl. We felt that the original Perl program was pretty damn good, but unfortunately, with all the data we have and some inconsistencies in naming, the original program could not keep up with some breaking changes. I tried originally to just fix the Perl, but that turned out to be more difficult than I could handle and come to a solution, so NewGlitch was born.
+Glitch.py is a Python implementation of the original GLITCH program implemented in Perl. The Perl script ran as a CGI script on our Cold Fusion page but now it does not work because many data structures have changed and become more complex, so glitch.py exists to bring back the old glitch functions. This "climate data summary tool" takes high resolution climate inputs, breaks them into one minute sections (for means, these sections are replications of the mean, for sums they are elements in that sum, and for wind magnitude they are x and y vectors, etc.) and then re-aggregates these components to a new time interval. 
 
-NewGlitch contains 4 key python scripts: map_glitch.py, glitch.py, logic_glitch.py, and front_glitch.py. map_glitch.py builds the lookup tables (json and yaml) from the database. glitch.py is most of the "back end" functions which do the computation. logic_glitch.py contains a few useful functions, but mostly two classes, Glitcher and SmartGlitcher. SmartGlitcher is a "smart" output tool for Glitcher. front_glitch.py is a rough "front-end" for glitch. It is purely python and html, with some jquery. The python is excuted via the bottle microframework.
+So, no interval less than a minute can be processed, and although in theory one could process a large interval, more than a day is really very silly.
 
-NewGlitch is versitile. You could use just the glitch.py to compute the glitches in a raw way, use just Glitcher to compute each attribute, or use SmartGlitcher to help you make nice clean outputs when you have evil input structures, like, uhm, sonic anemometers.
+This repository contains several key python scripts: map_glitch.py, glitch.py, logic_glitch.py, and api_glitch.py (a front-end, front_glitch.py, is in development).
 
-Components
-------
-
-map_glitch.py - generates .yaml and .json files that map the glitcher program onto any possible data set it could use in our database. Right now we find about 7 data sets, although some of them, like TW006, aren't very interesting.
-
-glitch.py - does the maths
-
-front_glitch.py - uses the bottle framework to dynamically route requests -- in progress
-
-logic_glitch.py - controls the mapping of glitch onto yaml files to reduce the inputs needed. SmartGlitcher will navigate which glitching methods to use.
+* map_glitch.py builds the lookup tables (json and yaml) from the database. 
+* glitch.py is most of the "back end" functions which do the computation of the intervals and the reaggregation.
+* logic_glitch.py helps to determine how various "methods" of glitching map onto our tables, and how to write outputs for them. logic_glitch.Glitcher classes contains most of the functionality, and logic_glitch.SmartGlitcher classes use the rules applied in Glitcher to do very high level functions like "tocsv".
+* api-glitch.py is the very simple command line api.
 
 map_glitch.py
 ------------
 
-Basically, it maps the production database to find things to glitch. Unlike the old method, it avoids using entity and subentity, so hey! no more needing to predefine queries. There's a bunch of helper functions in there but basically you just need
+Maps the production database to find things to glitch. Unlike the old method, it avoids using entity and subentity, so hey! no more needing to predefine queries. There's a bunch of helper functions in there but basically you just need
 
             _,cursor = connect() <- the read-only connection
 
@@ -31,78 +25,87 @@ Basically, it maps the production database to find things to glitch. Unlike the 
 
             output1 = all_build_dict(cursor)
 
-This one has an array, "possible", which is the possible dbcodes that contain probe and datetime. It just helps you limit your search. I recommend that we possibly check some of entity_attribute, as it looks like we don't have an MV00105, but yet it is in some of these tables, and that could cause other people trouble in the future, too.
+This one has an array, "possible", which is the possible dbcodes that contain probe and datetime. It just helps you limit your search. Right now I can see 4 possible tables, MS043, MS001, MS005, and HT004. However, more could be added.
 
 
       all_get_references(output1, cursor)
 
-This one eats the output of the above, and can be further refined to fit the data. For example, we clean out entities that don't have DATE_TIME or DATETIME, but you might want to keep something like DT or TMSTAMP. We clean out ones that don't have MEAN as an attribute (because all MEAN have a MEAN FLAG with them right now), but you might want to keep around TOT or INST or something. You could add this if you wanted.
+This one eats the output of the above, and can be further refined to fit the data. 
 
+For example, we clean out entities that don't have DATE_TIME or DATETIME, but you might want to keep something like DT or TMSTAMP. We clean out ones that don't have MEAN as an attribute (because all MEAN have a MEAN FLAG with them right now), but you might want to keep around TOT or INST. Right now we also keep TOT, but as names at HJA change we may want to keep INST also.
 
 The main method of map_glitch can be run executable. 
 
-on awesome OS's, you just want
+on awesome OS's, you just want to type:
 
-Not_a_PC:data_Ronin$ python map_glitch.py 
+            Not_a_PC:data_Ronin$ python map_glitch.py 
 
 on lame windows boxes,
 
-C:/I/Just/Love/Bill/Gates/Python2.7/ python.exe map_glitch.py
+            C:/I/Just/Love/Bill/Gates/Python2.7/ python.exe map_glitch.py
+
+
+It takes about 5 minutes to run this, so I'd recommend only doing it if you really have to. It's a long journey through all those tables.
 
 
 glitch.py
 -------
 
-Glitch is where the magic happens. 
-
-The main script at the bottom is an implementation of Glitch.py on a sample bit of data.
-
-    if __name__ == "__main__":
-
-      cx, cur = connect()
-      dbx_dict = get_data(cur, 'MS043')
-      prx_dict = get_probes(cur, dbx_dict)
-      probex = get_probetype(cur, 'MS04311')
-      attrx, flagx = get_attribute_names(cur,'MS04311')
-      vd = get_data_in_range(cur, '2010-04-10 00:00:00', '2010-04-10 02:00:00', 'MS04311', probex, attrx, flagx, 'AIRCEN01')
-
-      # printing output for simple test
-      print dbx_dict
-      print prx_dict
-      print vd
-
-      # now to aggregate
-      glitched_dict, glitched_flags = glitchme(vd, 3)
-
-      finalz = create_glitched_output(glitched_dict, glitched_flags)
-
-      csv_that_glitch(finalz)
-      html_that_glitch(finalz)
-
-      print finalz
-
+Glitch contains the main glitching functions.
 
 (1) the connect() function connects to the database with the read only user
 
 (2) the get_data(cursor, databaseid) function gets all the data tables associated
 with a particular database code (such as MS043 or MS001)
 
-(3) the get_probes(cursor, database_dictionary) function chains on the output of the
-get_data function to get all the probe codes for that data base (i.e. MS043, we would get a structure with 'MS04301': {AIRCEN01, AIRPRI01, etc.}, and then 'MS0405': {'RADCEN01', 'RADVAN01', etc.})
+(3) glitchme takes the received data and performs a glitching.
 
-(4) the get_probetype(cursor, tablename) function is right now being implemented on just MS04311 for testing. However, at this point we could loop over all the keys in the probe dictionary to get a list of appropriate names for a larger comprehension. I figured in the final implementation, this function would be called based on knowing which table we were after, so a loop would not be needed here.
+* First, it figures out what all the "found dates" are. For example, 2012-10-01 00:00:00, 2012-10-01 00:15:00, 2012-10-01 00:30:00, etc.
 
-(5) the get_attribute_names(cursor, tablename) function gets the name of the first attribute to contain "mean" right now. It is set that we could add more like the wind if needed. it also gets the matching flag.
+      * if a date is missing, it knows and doesn't include that in the list
+      * the list is sorted ascending
 
-(6) the get_data_in_range function gets the data for a given probe. In this case, I pass it just one probe name, 'AIRCEN01'. In the user case, that would be an open parameter supplied by a list generated from the output of the get_probes function. 
+* Then, it takes the first found date and the final found date and adds 1 "interval" you specify to that date. For example, if you want 2 hour intervals, the first date is 2012-10-01 02:00:00 in the above, and if it were to go to 2012-10-30 00:45:00, the last date would be 2012-10-30 02:45:00
 
-(7) glitchme takes the output from get_data_in_range and performs the dis-aggregation. See the comments in the code. Basically we generate a range of one minute time stamps, and use Kyle's method to replicate the last value measured until the next value measured along those one minute time steps. A generator expression is made to find the "times to glitch to". We iterate over the one minute values, adding them to a temporary list until we reach the next "interval to glitch to". Then we store the time of the interval and the list of values (and their flags) in an output structure. We generate the next value to glitch to, and continue to move along the one minute values. glitchme arrays are nice because they can be used with any of the summary methods (wind, regular, etc.)
+* Then it makes an iterator for a range from that adjusted first value to the adjusted final value by the specified interval. The reason for the adjustment is because this iterator for the range represents the "checkpoints" we use to trigger an iteration. So we want to trigger the first iteration at the first stopping point. We need the iterator to run past the last interval, knowing that the interval will stop at its logical end because that is how we programmed it. 
 
-(8) for almost everything but wind speed and direction, you just need to use create_glitched_output to generate means and flags. 
+      * If the first and final date you selected are length 1 (that is, there is only one single value selected, and it happens before the final date), then the program will ask you to go back and put in a longer interval. Because the first value would indicate the preceding intervals climate measurements, that measurement should not be distributed across the subsequent interval.
 
-(9) for wind speeds, you will want to run glitchme on the wind speed, and on the wind direction, and then pass it the wind speed, wind direction, and wind speed flags. This can be more easily handled in a Glitcher instance, where it's taken care of for you. then you can create_glitched_speeds to get an output
+* Then it creates an iterator for a one-minute range between the first real date and the last real date. So, in this case, that iterator is for 2012-10-01 00:01:00, 2012-10-01 00:02:00, etc.
 
-(10) for wind direction, you will run glitch me on wind speed, wind direction, and then pass it the wind speed, wind direction, and wind direction flags. This is also easier to handle in a Glitcher instance. Otherwise, use create_glitched_dirs to get the right output
+* Next, we create storage for the value of interest (called t_mean) and the flag of interest (called f_mean)
+
+* Next, we step into the range of real dates. The current measurement is called this_date and the next measurement is called subsequent. The checkpoint we are looking for is called checkpoint.
+
+* For most qualities, except totals, we are looking (at this stage) to replicate the value we find over the interval. 
+      * For example, if the mean air temperature at 2012-10-02 00:15:00 is 11.7, this means that we have measurements of 11.7 temperature for the past 15 one minute intervals 2012-10-01 00:01:00 is 11.7, 2012-10-02 00:02:00 is 11.7 etc. Note that this is NOT linear interpolation. It is just replication. 
+      * For wind magnitude, INITIALLY, we also just take these replicates, but when we go to re-assemble, we attach them to the direction appropriately. So, if at 2012-10-02 00:15:00 we had windspeed 2.0 and wind direction 145, that means at 2012-10-02 00:01:00 we had 2.0 and 145, at 2012-10-02 00:02:00 we had 2.0 and 145., etc. When we remake the magnitude we decompose each of those parts down into X and Y components, and, if the interval is longer than the given time, then those components are added by X and Y's to make an appropriate resultant.
+      * For totals, like precip, if we measured 0.45 mm at 2012-10-02 00:15:00, this is the same as seeing 0.03 mm at 00:01:00, 0.03 at 00:02:00, etc. So each one minute in this case is divided by the duration of the interval.
+
+* We iterate over the one minute intervals. 
+
+      * First, we check if the interval is a checkpoint. If it is, and we haven't already seen it (that is bad), we take the list in the t_mean array (all the one minute values) and the list in the f_mean array (all the one minute flags) and we put it into the results map.
+
+      * We reset the storage in t_mean and f_mean to blank and increment the checkpoint
+
+      * We still need to make sure we get the value at that one-minute interval ready for the next append table, so we check:
+
+            * Is the observation value still the same or does it also needed to be incremented?
+            * Is the value a number or none?
+
+      * We append the value, or a none, to the t_mean and f_mean. If we need to, we also increment the observation.
+
+* When we run out of one-minute intervals, the iteration stops, and we return the glitch.
+
+
+(4) create_glitch does glitch aggregation for 1 variable means and totals. Basically, it walks over the sorted dates in the output from glitchme, and either takes a mean of all the values in t_mean or takes their sum if a total. It also applies the flagging algorithm if the data is missing. If the missing data is more than 80 percent of the data, then the data is set to None.
+
+(5) create_glitch_mags decomposes the wind speeds and wind directions to their x and y components, and computes the directional magnitude by adding the one-minute y and x values within that interval and taking the root of them. It also applies the glitch flagging algorithm, including setting the missing data to None.
+
+(6) create_glitched_dirs decomposes the direction using the Yamartino method. The campbell loggers also use the Yamartino method-- it weights the directions by their speeds. This puts more trust on faster windspeeds, which makes sense on a prop.
+
+(7) csv_that_glitch, csv_that_windy_glitch, csv_that_sonic_glitch, and csv_that_solar_glitch take the inputs from the glitch creations and make them into csv files that are written with appropriate headers. right now they make html files as well. This will be taken into another function. 
+
 
 logic_glitch.py
 ----------
@@ -142,6 +145,20 @@ The SmartGlitcher class supers the Glitcher class. Call it like this:
       instanceName.tocsv(outputName, 'desired_csv_filename.csv')
 
 If you don't specify a filename, it will give you some default name like "sample.csv".
+
+
+api_glitch.py
+----------
+
+api_glitch is a simple command line interface which will walk you through creating an instance of SmartGlitcher. 
+
+
+
+Manual Tests of Function
+---------------------
+
+Several tests of function have been created. These will be included here on the next push.
+
 
 Differences from the Perl
 -------------

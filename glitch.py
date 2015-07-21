@@ -62,7 +62,12 @@ def glitchme(valid_data, interval, precip=False):
   this_date = starting.next()
 
   # ex. 2010-10-01 00:05:00
-  subsequent = starting.next()
+  try:
+    subsequent = starting.next()
+  except StopIteration:
+    print """You have selected an ending date which occurs prior to the next measurement. Try adding a small amount of time to the input ending date.
+    For example, if you gave 2002-10-02 00:00:00 and 2002-10-03 00:00:00 for PPTCEN01, this daily measurement would only include that first midnight point. You could change the end date to 2002-10-03 00:05:00, which would then make sure that the total found at 2002-10-03 was distributed back over the previous interval if needed.
+    """
 
   # first point to put in for the glitch (ex 2010-10-01 00:15:00)
   checkpoint = super_range.next()
@@ -130,6 +135,7 @@ def glitchme(valid_data, interval, precip=False):
 
       try:
         t_mean.append(round(float(valid_data[this_date]['attr'])/duration,3))
+      
       except Exception:
         t_mean.append(valid_data[this_date]['attr'])
 
@@ -156,6 +162,7 @@ def create_glitch(results, precip=False):
 
         try:
           meanval = round(sum(results[each_glitch]['val']),2)
+        
         except Exception:
           values = [results[each_glitch]['val'][index] for index,x in enumerate(results[each_glitch]['val']) if x != None and x != "None"]
 
@@ -193,6 +200,7 @@ def create_glitch(results, precip=False):
 
           if numM/num_flags > 0.8:
             flagged_val = 'M'
+            mean_val = None
           elif numE/num_flags > 0.05:
             flagged_val = 'E'
           elif (numE + numM + numQ)/num_flags > 0.05:
@@ -242,16 +250,16 @@ def create_glitched_mags(results1, results2):
         glitched_mag = math.sqrt(ypart + xpart)
 
       try:
-        num_flags = len(results_flags[each_glitch]['fval'])
+        num_flags = len(results1[each_glitch]['fval'])
         
-        if 'E' not in results[each_glitch]['fval'] and 'M' not in results[each_glitch]['fval'] and 'Q' not in results[each_glitch]['fval']:
+        if 'E' not in results1[each_glitch]['fval'] and 'M' not in results1[each_glitch]['fval'] and 'Q' not in results1[each_glitch]['fval']:
 
           glitched_spd_flag = 'A'
         
         else:
-          numM = len([x for x in results_flags[each_glitch]['fval'] if x == 'M'])
-          numE = len([x for x in results_flags[each_glitch]['fval'] if x == 'E'])
-          numQ = len([x for x in results_flags[each_glitch]['fval'] if x == 'Q'])
+          numM = len([x for x in results1[each_glitch]['fval'] if x == 'M'])
+          numE = len([x for x in results1[each_glitch]['fval'] if x == 'E'])
+          numQ = len([x for x in results1[each_glitch]['fval'] if x == 'Q'])
 
           if numM/num_flags > 0.8:
             glitched_mag_flag = 'M'
@@ -287,6 +295,7 @@ def create_glitched_dirs(results1, results2):
   final_glitch = {}
 
   for each_glitch in sorted(results1.keys()):
+    
     if results1[each_glitch]['val'] != []:
 
       num_valid_obs = len(results1[each_glitch]['val'])
@@ -297,6 +306,9 @@ def create_glitched_dirs(results1, results2):
         theta_u = math.atan2(sum([float(speed) * math.sin(math.radians(float(x))) for (speed, x) in itertools.izip(results1[each_glitch]['val'], results2[each_glitch]['val'])])/num_valid_obs, sum([float(speed) * math.cos(math.radians(float(x))) for (speed, x) in itertools.izip(results1[each_glitch]['val'],results2[each_glitch]['val'])])/num_valid_obs)
 
         glitched_dir = round(math.degrees(theta_u),3)
+        
+        if glitched_dir < 0.:
+          glitched_dir = 360+glitched_dir
 
       except Exception: 
 
@@ -307,15 +319,20 @@ def create_glitched_dirs(results1, results2):
         theta_u = math.atan2(sum([float(speed) * math.sin(math.radians(float(x))) for (speed, x) in itertools.izip(results1[each_glitch]['val'], results2[each_glitch]['val']) if speed != 'None' and x != 'None'])/num_valid_obs, sum([float(speed) * math.cos(math.radians(float(x))) for (speed, x) in itertools.izip(results1[each_glitch]['val'],results2[each_glitch]['val']) if speed != 'None' and x != 'None'])/num_valid_obs)
 
         glitched_dir = round(math.degrees(theta_u),3)
+        
+        if glitched_dir < 0.:
+          glitched_dir = 360+glitched_dir
 
       try:
-        num_flags = len(results_flags[each_glitch]['fval'])
-        if 'E' not in results_flags[each_glitch]['fval'] and 'M' not in results_flags[each_glitch]['fval'] and 'Q' not in results_flags[each_glitch]['fval']:
+        num_flags = len(results2[each_glitch]['fval'])
+        
+        if 'E' not in results2[each_glitch]['fval'] and 'M' not in results2[each_glitch]['fval'] and 'Q' not in results2[each_glitch]['fval']:
           flagged_val = 'A'
+        
         else:
-          numM = len([x for x in results_flags[each_glitch]['fval'] if x == 'M'])
-          numE = len([x for x in results_flags[each_glitch]['fval'] if x == 'E'])
-          numQ = len([x for x in results_flags[each_glitch]['fval'] if x == 'Q'])
+          numM = len([x for x in results2[each_glitch]['fval'] if x == 'M'])
+          numE = len([x for x in results2[each_glitch]['fval'] if x == 'E'])
+          numQ = len([x for x in results2[each_glitch]['fval'] if x == 'Q'])
 
           if numM/num_flags > 0.8:
             flagged_val = 'M'
@@ -327,6 +344,7 @@ def create_glitched_dirs(results1, results2):
             flagged_val = 'A'
     
       except Exception:
+          print "an exception was thrown on wind direction"
           flagged_val = 'M'
 
     elif results1[each_glitch]['val'] == [] or results2[each_glitch]['val'] == []:
@@ -336,8 +354,6 @@ def create_glitched_dirs(results1, results2):
     final_glitch[each_glitch] = {'mean': round(glitched_dir,2), 'flags': flagged_val}
 
   return final_glitch
-
-
 
 def csv_that_glitch(final_glitch, csvfilename = "sample_glitch_csv.csv"):
   """ create a csv for the glitch. pass 1 parameter of csvfilename = <blah> if you want to name it"""
@@ -354,8 +370,7 @@ def csv_that_glitch(final_glitch, csvfilename = "sample_glitch_csv.csv"):
       vals= [final_glitch[x]['mean'] for x in dates]
     except Exception:
       vals = [final_glitch[x]['mean'] for x in raw_dates]
-    t
-    ry:
+    try:
       flags = [final_glitch[x]['flags'] for x in dates]
     except Exception:
       flags = [final_glitch[x]['flags'] for x in raw_dates]
@@ -498,7 +513,7 @@ def csv_that_sonic_glitch(final_glitch1, final_glitch2, final_glitch3, final_gli
     print("Sonic Glitch csv -- completed!")
     return csv_list
 
-def csv_that_solar_glitch(final_glitch1, final_glitch2):
+def csv_that_solar_glitch(final_glitch1, final_glitch2, csvfilename="sample_solar_glitch.csv"):
 
   """ solar glitch first takes a mean and then a tot -- the difference is that precip is true on the second and false on the first, so that the total method is used"""
   

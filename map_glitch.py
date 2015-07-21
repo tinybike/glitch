@@ -48,7 +48,7 @@ def get_entity_id(cursor, databaseid):
 def all_build_dict(cursor):  
     """ Possible schema which have a column containing 'probe'. Add to this list to make a more robust search space"""
     #possible = ['MV001', 'MS001', 'MS005', 'TV025', 'HT004']
-    possible = ['MS043', 'MV001', 'MS001', 'MS005', 'TV025', 'HT004']
+    possible = ['MS043', 'MS001', 'MS005', 'HT004']
 
     od = {}
 
