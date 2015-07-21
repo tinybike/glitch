@@ -450,3 +450,42 @@ class SmartGlitcher(Glitcher):
             web_csv = csv_that_solar_glitch(final_glitch1, final_glitch2, csvfilename)
 
         return web_csv
+
+    def tonarra(self):
+        """ single attribute glitches can be written to narra"""
+        from glitch import html_that_glitch
+        final_glitch = self.decide()
+        html_that_glitch(final_glitch)
+
+    def graphme(self, pngfilename="my_sample_png.png"):
+
+        import numpy as np
+        import matplotlib.pyplot as plt
+        import matplotlib.dates as mdates
+        import mpld3
+        import datetime
+
+        """ creating background info"""
+        # create a plot with as may subplots as you choose
+        fig, ax = plt.subplots()
+        # add a grid to the background
+        ax.grid(True, alpha = 0.2)
+        # the x axis contains date
+        fig.autofmt_xdate()
+        # the dates are year, month
+        ax.fmt_xdata = mdates.DateFormatter('%Y-%m')
+
+        if self.table not in ['MS04314', 'MS00114', 'MS04334','MS04315','MS00115']:
+            final_glitch = self.decide()
+
+            dates = sorted(final_glitch.keys())
+            dates2 = [x for x in dates if final_glitch[x]['mean'] != None and final_glitch[x]['mean'] != "None"]
+            vals = [final_glitch[x]['mean'] for x in dates2]
+            glitched_values = ax.plot(dates2, vals, 'b-')
+            ax.legend(loc=4)
+            ax.set_xlabel("dates")
+            ax.set_ylabel("values")
+            mpld3.show()
+            mpld3.save_html(fig, 'my_output_html.html')
+            import pylab
+            pylab.savefig(pngfilename)

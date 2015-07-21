@@ -254,7 +254,7 @@ def create_glitched_mags(results1, results2):
         
         if 'E' not in results1[each_glitch]['fval'] and 'M' not in results1[each_glitch]['fval'] and 'Q' not in results1[each_glitch]['fval']:
 
-          glitched_spd_flag = 'A'
+          glitched_mag_flag = 'A'
         
         else:
           numM = len([x for x in results1[each_glitch]['fval'] if x == 'M'])
@@ -263,6 +263,7 @@ def create_glitched_mags(results1, results2):
 
           if numM/num_flags > 0.8:
             glitched_mag_flag = 'M'
+            glitched_mag = None
           elif numE/num_flags > 0.05:
             glitched_mag_flag = 'E'
           elif (numE + numM + numQ)/num_flags > 0.05:
@@ -570,7 +571,7 @@ def html_that_glitch(final_glitch):
   list_of_flags=[final_glitch[glitch_day]['flags'] for glitch_day in sorted(final_glitch.keys())]
   list_of_vals=[str(final_glitch[glitch_day]['mean']) for glitch_day in sorted(final_glitch.keys())]
 
-  with open('//Volumes/andlter/LTERPlot/Fox/test.html','w') as htmlfile:
+  with open('//Volumes/forshare/GROUPS/FSDB/MS01/test_glitch.html','w') as htmlfile:
     htmlfile.write("""
     <!DOCTYPE html>
     <html xmlns="http://www.w3.org/1999/xhtml">

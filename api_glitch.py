@@ -8,12 +8,7 @@ def describe_glitch():
     print """
     Welcome to Glitch.py, python-based climate data aggregation.
     
-    ~ First, I will ask if you would like to remap your database. This 
-    takes about 5 minutes, and will rebuild the yaml and json files
-    which specify the available probes, their start and end dates,
-    and the available "mean words" and "flag words". You should do this 
-    any time you make a structural change to the database, or update/insert 
-    a lot of new data.
+    ~ If you want to remap your database, you should run map_glitch.py first
 
     ~ Next, I will ask you to choose a table. From these tables, you will be 
     presented with a list of available probes.
@@ -25,9 +20,9 @@ def describe_glitch():
     (in minutes) that you wish to glitch. Please do not select intervals 
     of less than a minute, or I will crash.
 
-    ~ Finally, you can choose to have a csv output, html output, or graphical 
-    output. For .csv, type --csv. For .html, type --html. For graphical, type 
-    --png. You can choose any or all of these.
+    ~ Finally, you can choose to have a cav and html output or just a graph. If you 
+    want csv and html, the csv file and the html file will have the same name, but the html 
+    file will save with the .html extension.
     """
 
 def get_yaml():
@@ -158,14 +153,27 @@ def interval_choice():
 def what_to_do(thisGlitch):
     print("What do you want to do with your glitch?")
 
-    possible_outputs = raw_input("Type --csv for CSV file, --png for Graph, --html for webpage. You can have all three! -->")
+    possible_outputs = raw_input("Type csv for a csv and html, type png for a graph")
 
-    if "--csv" in possible_outputs:
+    if "csv" in possible_outputs:
         csvfilename = raw_input("What to call your csv file? --> ")
-        thisGlitch.tocsv(csvfilename)
+
+        htmlfilename = csvfilename[:-3] + ".html"
+        htmlfilename = thisGlitch.tocsv(csvfilename)
+
+        print "do you also want to make a graph?"
+        pngfilename = raw_input("if you want a graph, type a filename, otherwise, press CTRL + C to exit --> ")
+        thisGlitch.graphme(pngfilename)
 
     else:
         pass
+
+    if "png" in possible_outputs:
+        pngfilename = raw_input("what to call your figure? --> ")
+        thisGlitch.graphme(pngfilename)
+    else:
+        pass
+
 
 if __name__ == "__main__":
 
