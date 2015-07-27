@@ -375,7 +375,7 @@ def csv_that_glitch(final_glitch, csvfilename = "sample_glitch_csv.csv"):
       flags = [final_glitch[x]['flags'] for x in dates]
     except Exception:
       flags = [final_glitch[x]['flags'] for x in raw_dates]
-
+  
     writer.writerow(['DATE_TIME', 'GLITCHED_MEAN', 'GLITCHED_FLAG'])
     csv_list.append("<br> DATE_TIME, GLITCHED_MEAN, GLITCHED_FLAG </br>")
     
@@ -559,7 +559,7 @@ def csv_that_solar_glitch(final_glitch1, final_glitch2, csvfilename="sample_sola
 
       csv_list.append("<br>" + each_date + ", " + str(vals_mean[index]) +", " + str(flags_mean[index]) + ", " + str(vals_tot[index]) + ", " + str(flags_tot[index]) +"</br>")
 
-    print csv_list
+    # print csv_list
   print("Solar csv -- completed!")
   return csv_list
 

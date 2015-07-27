@@ -153,7 +153,9 @@ def interval_choice():
 def what_to_do(thisGlitch):
     print("What do you want to do with your glitch?")
 
-    possible_outputs = raw_input("Type csv for a csv and html, type png for a graph")
+    possible_outputs = raw_input("Type csv for a csv and html, type png for a graph--> ")
+
+    print("First I will display your graph in the browser. Press CTRL + c when you are done looking at it and I will save it to your directory under the name you choose next.")
 
     if "csv" in possible_outputs:
         csvfilename = raw_input("What to call your csv file? --> ")
