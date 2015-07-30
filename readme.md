@@ -1,7 +1,32 @@
 READ ME -- Glitch.py
 =========
 
-Version: 0.1.0
+
+BASIC INSTRUCTIONS TO RUN GLITCH AS A ONE-HIT FUNCTION ON CMD LINE:
+
+
+execute as main, hans_glitch.py followed by (1) Table name, (2) Probe Code, (3) Start Date, (4) End Date, (5) Interval
+
+EXAMPLE(s):
+
+python hans_glitch.py MS04311 AIRCEN01 "2012-10-01 00:00:00" "2012-10-10 00:00:00"
+70
+
+python hans_glitch.py MS04313 PPTCEN01 "2013-04-10 00:05:00" "2014-05-00 00:20:00" 63
+
+
+OR CALL IN CODE
+
+from hans_glitch import *
+
+hans_glitch("MS04311", "AIRCEN01","2012-10-01 00:00:00","2012-10-10 00:00:00",70)
+
+csv saves as "default.csv"
+html is printed. 
+
+=====
+
+Version: 0.1.1
 
 Glitch.py is a Python implementation of the original GLITCH program implemented in Perl. The Perl script ran as a CGI script on our Cold Fusion page but now it does not work because many data structures have changed and become more complex, so glitch.py exists to bring back the old glitch functions. This "climate data summary tool" takes high resolution climate inputs, breaks them into one minute sections (for means, these sections are replications of the mean, for sums they are elements in that sum, and for wind magnitude they are x and y vectors, etc.) and then re-aggregates these components to a new time interval. 
 

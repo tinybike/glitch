@@ -114,7 +114,7 @@ def glitchme(valid_data, interval, precip=False):
         t_mean.append(round(float(valid_data[this_date]['attr'])/duration,3))
       except Exception:
         #import pdb; pdb.set_trace()
-        print "none value found as " + str(valid_data[this_date]['attr']) + " on " + datetime.datetime.strftime(this_date, '%Y-%m-%d %H:%M:%S')
+        #print "none value found as " + str(valid_data[this_date]['attr']) + " on " + datetime.datetime.strftime(this_date, '%Y-%m-%d %H:%M:%S')
         t_mean.append(valid_data[this_date]['attr'])
 
       f_mean.append(valid_data[this_date]['flag'])
