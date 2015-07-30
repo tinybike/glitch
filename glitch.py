@@ -383,7 +383,7 @@ def csv_that_glitch(final_glitch, csvfilename = "sample_glitch_csv.csv"):
       writer.writerow([each_date, vals[index], flags[index]])
       csv_list.append("<br>" + each_date + "," + str(vals[index]) +", " + flags[index] +"</br>")
 
-  print("Glitched csv -- standard formatting -- completed!")
+  #print("Glitched csv -- standard formatting -- completed!")
   return csv_list 
 
 def csv_that_windy_glitch(final_glitch1, final_glitch2, final_glitch3, csvfilename="sample_windy_glitch_csv.csv"):
@@ -439,8 +439,8 @@ def csv_that_windy_glitch(final_glitch1, final_glitch2, final_glitch3, csvfilena
 
       csv_list.append("<br>" + each_date + ", " + str(vals_spd[index]) +", " + str(flags_spd[index]) + ", " + str(vals_dir[index]) + ", " + str(flags_dir[index]) + ", " + str(vals_mag[index]) + ", " + str(flags_mag[index]) +"</br>")
 
-    print csv_list
-  print("Windy Glitch csv -- completed!")
+  #  print csv_list
+  #print("Windy Glitch csv -- completed!")
   return csv_list
 
 def csv_that_sonic_glitch(final_glitch1, final_glitch2, final_glitch3, final_glitch4, final_glitch5, csvfilename="sample_sonic_glitch_csv.csv"):
@@ -511,7 +511,7 @@ def csv_that_sonic_glitch(final_glitch1, final_glitch2, final_glitch3, final_gli
       csv_list.append("<br>" + each_date + ", " + str(vals_spd[index]) + ", " + flags_spd[index] + 
         ", " + str(vals_dir[index]) + ", " + flags_dir[index] + ", " + str(vals_ux[index]) + ", " + flags_ux[index] + ", " + str(vals_uy[index]) + ", " + flags_uy[index] + ", " + str(vals_air[index]) + ", " + flags_air[index] + "</br>")
 
-    print("Sonic Glitch csv -- completed!")
+    #print("Sonic Glitch csv -- completed!")
     return csv_list
 
 def csv_that_solar_glitch(final_glitch1, final_glitch2, csvfilename="sample_solar_glitch.csv"):
@@ -560,7 +560,7 @@ def csv_that_solar_glitch(final_glitch1, final_glitch2, csvfilename="sample_sola
       csv_list.append("<br>" + each_date + ", " + str(vals_mean[index]) +", " + str(flags_mean[index]) + ", " + str(vals_tot[index]) + ", " + str(flags_tot[index]) +"</br>")
 
     # print csv_list
-  print("Solar csv -- completed!")
+  #print("Solar csv -- completed!")
   return csv_list
 
 

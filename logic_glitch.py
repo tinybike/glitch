@@ -251,7 +251,7 @@ class Glitcher(object):
             # flags and values
             if self.table not in ['HT00411','MS00511','HT00434','MS00512','MS00531']:
                 
-                print "KEY WORD is listed; TABLE IS NOT a weird one in HT004 or MS005"
+                #print "KEY WORD is listed; TABLE IS NOT a weird one in HT004 or MS005"
                 
                 val_word = [x for x in self.u[self.table]['mean_words'] if 'FLAG' not in x][0]
                 flag_word = [x for x in self.u[self.table]['mean_words'] if 'FLAG' in x][0]
@@ -451,11 +451,11 @@ class SmartGlitcher(Glitcher):
 
         return web_csv
 
-    def tonarra(self):
-        """ single attribute glitches can be written to narra"""
-        from glitch import html_that_glitch
-        final_glitch = self.decide()
-        html_that_glitch(final_glitch)
+    # def tonarra(self):
+    #     """ single attribute glitches can be written to narra"""
+    #     from glitch import html_that_glitch
+    #     final_glitch = self.decide()
+    #     html_that_glitch(final_glitch)
 
     def graphme(self, pngfilename="my_sample_png.png"):
 
