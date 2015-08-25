@@ -1,6 +1,8 @@
-READ ME -- Glitch.py
+Glitch.py
 =========
 
+[![Build Status](https://travis-ci.org/tinybike/glitch.svg)](https://travis-ci.org/tinybike/glitch)
+[![Coverage Status](https://coveralls.io/repos/tinybike/glitch/badge.svg?branch=master&service=github)](https://coveralls.io/github/tinybike/glitch?branch=master)
 
 BASIC INSTRUCTIONS TO RUN GLITCH AS A ONE-HIT FUNCTION ON CMD LINE:
 
